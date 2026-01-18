@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Accessibility</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="app-container">
+      <!-- Header with glassmorphism -->
+      <header class="header">
+        <div class="logo">
+          <div class="logo-icon">
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle cx="12" cy="12" r="10" stroke="white" stroke-width="2" />
+              <circle cx="12" cy="8" r="2" fill="white" />
+              <path
+                d="M12 11V16M9 13L12 11L15 13M9 18H15"
+                stroke="white"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </div>
+          <div class="logo-text">
+            <h1>Accessibility</h1>
+            <p class="tagline">Designed for everyone</p>
+          </div>
+        </div>
+
+        <!-- Theme Toggle Button -->
+        <button
+          id="themeToggle"
+          class="theme-toggle"
+          aria-label="Toggle dark mode"
+        >
+          <svg
+            class="sun-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="12" cy="12" r="5" />
+            <path
+              d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
+            />
+          </svg>
+          <svg
+            class="moon-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+        </button>
+      </header>
+
+      <!-- Main Content -->
+      <main class="main-content">
+        <!-- Display Controls Card -->
+        <section class="card">
+          <div class="card-header">
+            <span class="card-icon">👁</span>
+            <h2>Vision</h2>
+          </div>
+          <div class="card-content">
+            <!-- Text Size Slider -->
+            <div class="control-row">
+              <span class="control-label">Text Size</span>
+              <div class="size-control">
+                <button
+                  id="decreaseText"
+                  class="size-btn"
+                  aria-label="Decrease text size"
+                >
+                  <span>−</span>
+                </button>
+                <div class="size-value" id="textSizeDisplay">100%</div>
+                <button
+                  id="increaseText"
+                  class="size-btn"
+                  aria-label="Increase text size"
+                >
+                  <span>+</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- High Contrast Toggle -->
+            <div class="control-row">
+              <span class="control-label">High Contrast</span>
+              <button
+                id="toggleContrast"
+                class="toggle-btn"
+                aria-label="Toggle high contrast"
+              >
+                <span class="toggle-track">
+                  <span class="toggle-thumb"></span>
+                </span>
+              </button>
+            </div>
+
+            <!-- Dyslexia Font Toggle -->
+            <div class="control-row">
+              <span class="control-label">Dyslexia Font</span>
+              <button
+                id="toggleDyslexia"
+                class="toggle-btn"
+                aria-label="Toggle dyslexia-friendly font"
+              >
+                <span class="toggle-track">
+                  <span class="toggle-thumb"></span>
+                </span>
+              </button>
+            </div>
+
+            <!-- Letter Spacing -->
+            <div class="control-row">
+              <span class="control-label">Letter Spacing</span>
+              <div class="size-control">
+                <button
+                  id="decreaseSpacing"
+                  class="size-btn"
+                  aria-label="Decrease spacing"
+                >
+                  <span>−</span>
+                </button>
+                <div class="size-value" id="spacingDisplay">0px</div>
+                <button
+                  id="increaseSpacing"
+                  class="size-btn"
+                  aria-label="Increase spacing"
+                >
+                  <span>+</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Line Height -->
+            <div class="control-row">
+              <span class="control-label">Line Height</span>
+              <div class="size-control">
+                <button
+                  id="decreaseLineHeight"
+                  class="size-btn"
+                  aria-label="Decrease line height"
+                >
+                  <span>−</span>
+                </button>
+                <div class="size-value" id="lineHeightDisplay">1.5</div>
+                <button
+                  id="increaseLineHeight"
+                  class="size-btn"
+                  aria-label="Increase line height"
+                >
+                  <span>+</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Reading Guide Toggle -->
+            <div class="control-row">
+              <span class="control-label">Reading Guide</span>
+              <button
+                id="toggleReadingGuide"
+                class="toggle-btn"
+                aria-label="Toggle reading guide"
+              >
+                <span class="toggle-track">
+                  <span class="toggle-thumb"></span>
+                </span>
+              </button>
+            </div>
+
+            <!-- Highlight Links Toggle -->
+            <div class="control-row">
+              <span class="control-label">Highlight Links</span>
+              <button
+                id="toggleHighlightLinks"
+                class="toggle-btn"
+                aria-label="Toggle highlight links"
+              >
+                <span class="toggle-track">
+                  <span class="toggle-thumb"></span>
+                </span>
+              </button>
+            </div>
+
+            <!-- Big Cursor Toggle -->
+            <div class="control-row">
+              <span class="control-label">Big Cursor</span>
+              <button
+                id="toggleBigCursor"
+                class="toggle-btn"
+                aria-label="Toggle big cursor"
+              >
+                <span class="toggle-track">
+                  <span class="toggle-thumb"></span>
+                </span>
+              </button>
+            </div>
+
+            <!-- Reset -->
+            <button id="resetBtn" class="reset-btn">
+              <span class="reset-icon">↺</span>
+              Reset All
+            </button>
+          </div>
+        </section>
+
+        <!-- Color Blindness Card -->
+        <section class="card">
+          <div class="card-header">
+            <span class="card-icon">🎨</span>
+            <h2>Color Blindness</h2>
+          </div>
+          <div class="card-content">
+            <div class="filter-grid">
+              <button
+                id="filterNone"
+                class="filter-btn active"
+                aria-label="No filter"
+              >
+                <span class="filter-preview normal"></span>
+                <span>None</span>
+              </button>
+              <button
+                id="filterProtanopia"
+                class="filter-btn"
+                aria-label="Protanopia filter"
+              >
+                <span class="filter-preview protanopia"></span>
+                <span>Protanopia</span>
+              </button>
+              <button
+                id="filterDeuteranopia"
+                class="filter-btn"
+                aria-label="Deuteranopia filter"
+              >
+                <span class="filter-preview deuteranopia"></span>
+                <span>Deuteranopia</span>
+              </button>
+              <button
+                id="filterTritanopia"
+                class="filter-btn"
+                aria-label="Tritanopia filter"
+              >
+                <span class="filter-preview tritanopia"></span>
+                <span>Tritanopia</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Text to Speech Card -->
+        <section class="card">
+          <div class="card-header">
+            <span class="card-icon">🔊</span>
+            <h2>Text to Speech</h2>
+          </div>
+          <div class="card-content">
+            <textarea
+              id="textInput"
+              class="text-input"
+              placeholder="Type or paste text here..."
+            >
+Welcome to Accessibility. Click play to hear this message.</textarea
+            >
+
+            <!-- Speech Rate -->
+            <div class="control-row">
+              <span class="control-label">Speed</span>
+              <div class="size-control">
+                <button id="decreaseRate" class="size-btn" aria-label="Slower">
+                  <span>−</span>
+                </button>
+                <div class="size-value" id="rateDisplay">1.0x</div>
+                <button id="increaseRate" class="size-btn" aria-label="Faster">
+                  <span>+</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="audio-controls">
+              <button id="speakBtn" class="play-btn" aria-label="Play">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </button>
+              <button id="stopSpeakBtn" class="stop-btn" aria-label="Stop">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+              </button>
+              <button
+                id="speakPageBtn"
+                class="action-btn"
+                aria-label="Read selected text"
+              >
+                📄 Read Selection
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Live Captions Card -->
+        <section class="card">
+          <div class="card-header">
+            <span class="card-icon">👂</span>
+            <h2>Hearing</h2>
+          </div>
+          <div class="card-content">
+            <p class="section-label">Live Captions</p>
+            <div class="caption-controls">
+              <button
+                id="startCaptionsBtn"
+                class="mic-btn"
+                aria-label="Start captions"
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path
+                    d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"
+                  />
+                  <path
+                    d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"
+                  />
+                </svg>
+              </button>
+              <button
+                id="stopCaptionsBtn"
+                class="control-btn stop"
+                aria-label="Stop captions"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+              </button>
+              <button
+                id="clearCaptionsBtn"
+                class="control-btn clear"
+                aria-label="Clear captions"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div id="captionStatus" class="caption-status idle">
+              <span class="status-dot"></span>
+              <span class="status-text">Ready</span>
+            </div>
+            <div id="captionDisplay" class="caption-display">
+              <span class="placeholder-text"
+                >Your words will appear here...</span
+              >
+            </div>
+
+            <!-- Visual Alerts Toggle -->
+            <p class="section-label" style="margin-top: 16px">Visual Alerts</p>
+            <div class="control-row">
+              <span class="control-label">Screen Flash</span>
+              <button
+                id="toggleVisualAlerts"
+                class="toggle-btn"
+                aria-label="Toggle visual alerts"
+              >
+                <span class="toggle-track">
+                  <span class="toggle-thumb"></span>
+                </span>
+              </button>
+            </div>
+
+            <!-- Focus Indicator Toggle -->
+            <div class="control-row">
+              <span class="control-label">Focus Indicator</span>
+              <button
+                id="toggleFocusIndicator"
+                class="toggle-btn"
+                aria-label="Toggle focus indicator"
+              >
+                <span class="toggle-track">
+                  <span class="toggle-thumb"></span>
+                </span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Keyboard Shortcuts Card -->
+        <section class="card">
+          <div class="card-header">
+            <span class="card-icon">⌨️</span>
+            <h2>Quick Info</h2>
+          </div>
+          <div class="card-content">
+            <div class="shortcuts-list">
+              <div class="shortcut-item">
+                <span class="shortcut-key">Tab</span>
+                <span class="shortcut-desc">Navigate elements</span>
+              </div>
+              <div class="shortcut-item">
+                <span class="shortcut-key">Enter</span>
+                <span class="shortcut-desc">Activate buttons</span>
+              </div>
+              <div class="shortcut-item">
+                <span class="shortcut-key">Esc</span>
+                <span class="shortcut-desc">Close dialogs</span>
+              </div>
+              <div class="shortcut-item">
+                <span class="shortcut-key">Ctrl +/-</span>
+                <span class="shortcut-desc">Browser zoom</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- Footer -->
+      <footer class="footer">
+        <p>Crafted with care for accessibility</p>
+      </footer>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

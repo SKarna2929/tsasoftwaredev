@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Accessibility Helper",
+  "description": "Text-to-speech, high contrast, text size, and live captions for accessibility",
+  "version": "1.0.0",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Accessibility Helper"
+  },
+  "permissions": ["activeTab", "scripting", "tabs", "<all_urls>"],
+  "host_permissions": ["<all_urls>"]
+}

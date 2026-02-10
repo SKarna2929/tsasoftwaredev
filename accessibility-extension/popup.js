@@ -343,34 +343,17 @@ function injectTextSize(size) {
           document.head.appendChild(el);
         }
 
-        // Use a smarter approach: only scale text elements, not containers
-        // This preserves layout while making text more readable
-        var scale = sizePercent / 100;
-
         if (sizePercent === 100) {
           el.textContent = "";
           return;
         }
 
-        el.textContent =
-          // Scale text elements only - not their containers
-          "p, span:not(.icon):not([class*='icon']), " +
-          "a, li, td, th, label, " +
-          "h1, h2, h3, h4, h5, h6, " +
-          "blockquote, figcaption, caption, " +
-          "button, input, textarea, select, " +
-          ".text, [class*='text'], [class*='title'], [class*='desc'], " +
-          "article, section p, main p { " +
-          "  font-size: calc(1em * " +
-          scale +
-          ") !important; " +
-          "  line-height: 1.5 !important; " +
-          "}" +
-          // Ensure minimum tap targets for accessibility
-          "a, button, [role='button'] { " +
-          "  min-height: 44px; " +
-          "  min-width: 44px; " +
-          "}";
+        // Use CSS zoom on the html element.
+        // This scales everything proportionally without breaking layouts,
+        // just like Ctrl+/- browser zoom but controlled programmatically.
+        var zoomLevel = sizePercent / 100;
+
+        el.textContent = "html { zoom: " + zoomLevel + " !important; }";
       },
       args: [size],
     });

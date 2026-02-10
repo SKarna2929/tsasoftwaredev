@@ -317,30 +317,40 @@ async function hydrateVoices() {
   syncVoiceSelect();
 }
 
+function filteredVoices() {
+  const withoutMicrosoft = voices.filter(
+    (v) => !v.name.toLowerCase().startsWith("microsoft"),
+  );
+  const base = withoutMicrosoft.length ? withoutMicrosoft : voices;
+  const googleOnly = base.filter((v) =>
+    v.name.toLowerCase().includes("google"),
+  );
+
+  if (googleOnly.length) return googleOnly;
+
+  const english = base.filter((v) => v.lang.startsWith("en"));
+  if (english.length) return english;
+
+  return base;
+}
+
 function syncVoiceSelect() {
   const select = document.getElementById("voiceSelect");
   if (!select) return;
-  const englishVoices = voices.filter((v) => v.lang.startsWith("en"));
-  const list = englishVoices.length ? englishVoices : voices;
+  const list = filteredVoices();
   select.innerHTML = "";
 
-  const sorted = [...list].sort((a, b) => {
-    const premiumVendors = ["Google", "Microsoft", "Amazon", "Apple", "IBM"];
-    const score = (v) =>
-      (premiumVendors.some((vendor) => v.name.startsWith(vendor)) ? 1 : 0) +
-      (v.lang.startsWith("en-US") ? 1 : 0) +
-      (v.name.toLowerCase().includes("natural") ? 1 : 0);
-    return score(b) - score(a);
-  });
+  list
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach((voice) => {
+      const option = document.createElement("option");
+      option.value = voice.name;
+      option.textContent = `${voice.name} (${voice.lang})`;
+      select.appendChild(option);
+    });
 
-  sorted.forEach((voice) => {
-    const option = document.createElement("option");
-    option.value = voice.name;
-    option.textContent = `${voice.name} (${voice.lang})`;
-    select.appendChild(option);
-  });
-
-  const preferred = sorted.find((v) => v.name === state.voiceName) || sorted[0];
+  const preferred = list.find((v) => v.name === state.voiceName) || list[0];
   if (preferred) {
     state.voiceName = preferred.name;
     select.value = preferred.name;
@@ -348,8 +358,10 @@ function syncVoiceSelect() {
 }
 
 function pickVoice() {
-  if (!state.voiceName) return voices[0] || null;
-  return voices.find((v) => v.name === state.voiceName) || voices[0] || null;
+  const list = filteredVoices();
+  if (!list.length) return null;
+  if (!state.voiceName) return list[0];
+  return list.find((v) => v.name === state.voiceName) || list[0];
 }
 
 function speakText(text) {

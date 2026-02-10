@@ -278,6 +278,21 @@
 Welcome to Accessibility. Click play to hear this message.</textarea
             >
 
+            <!-- Voice Selection -->
+            <div class="control-row">
+              <span class="control-label">Voice</span>
+              <div class="select-control">
+                <select
+                  id="voiceSelect"
+                  class="select-input"
+                  aria-label="Choose reading voice"
+                ></select>
+                <span class="select-hint"
+                  >Prioritizes natural voices when available</span
+                >
+              </div>
+            </div>
+
             <!-- Speech Rate -->
             <div class="control-row">
               <span class="control-label">Speed</span>
@@ -321,6 +336,10 @@ Welcome to Accessibility. Click play to hear this message.</textarea
                 📄 Read Selection
               </button>
             </div>
+
+            <p id="a11yStatus" class="a11y-status" aria-live="polite">
+              Settings auto-save per device. Voices come from your browser.
+            </p>
           </div>
         </section>
 

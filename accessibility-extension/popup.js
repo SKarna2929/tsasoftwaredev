@@ -1,320 +1,196 @@
 // ============================================
 // POPUP.JS - Accessibility Helper Extension
-// Uses chrome.scripting.executeScript to modify websites
+// Modernized for resilience, autosave, and richer TTS controls
 // ============================================
 
-var textSize = 100;
-var highContrastOn = false;
-var dyslexiaFontOn = false;
-var letterSpacing = 0;
-var lineHeight = 1.5;
-var readingGuideOn = false;
-var highlightLinksOn = false;
-var bigCursorOn = false;
-var currentFilter = "none";
-var speechRate = 1.0;
-var visualAlertsOn = false;
-var focusIndicatorOn = false;
+const DEFAULT_STATE = {
+  textSize: 100,
+  highContrastOn: false,
+  dyslexiaFontOn: false,
+  letterSpacing: 0,
+  lineHeight: 1.5,
+  readingGuideOn: false,
+  highlightLinksOn: false,
+  bigCursorOn: false,
+  currentFilter: "none",
+  speechRate: 1.0,
+  visualAlertsOn: false,
+  focusIndicatorOn: false,
+  voiceName: "",
+};
 
-// Wait for DOM
-document.addEventListener("DOMContentLoaded", function () {
-  // ========== DARK MODE TOGGLE ==========
-  var savedTheme = localStorage.getItem("theme");
+let state = { ...DEFAULT_STATE };
+let voices = [];
+let recognition = null;
+let isListening = false;
+let finalTranscript = "";
+
+const storage = {
+  load() {
+    return new Promise((resolve) => {
+      chrome.storage.sync.get(["a11yState"], (data) => {
+        resolve(data.a11yState || {});
+      });
+    });
+  },
+  save(nextState) {
+    chrome.storage.sync.set({ a11yState: nextState });
+  },
+};
+
+document.addEventListener("DOMContentLoaded", init);
+
+async function init() {
+  await restoreState();
+  hydrateTheme();
+  bindUI();
+  await hydrateVoices();
+  renderState();
+  applyAllToPage();
+}
+
+async function restoreState() {
+  const saved = await storage.load();
+  state = { ...DEFAULT_STATE, ...saved };
+}
+
+function persistState() {
+  storage.save(state);
+  updateStatus("Settings saved");
+}
+
+function updateStatus(message) {
+  const status = document.getElementById("a11yStatus");
+  if (status) {
+    status.textContent = message;
+  }
+}
+
+function hydrateTheme() {
+  const savedTheme = localStorage.getItem("theme");
   if (savedTheme === "dark") {
     document.body.classList.add("dark-mode");
   }
 
-  document.getElementById("themeToggle").addEventListener("click", function () {
+  document.getElementById("themeToggle").addEventListener("click", () => {
     document.body.classList.toggle("dark-mode");
-    var isDark = document.body.classList.contains("dark-mode");
+    const isDark = document.body.classList.contains("dark-mode");
     localStorage.setItem("theme", isDark ? "dark" : "light");
   });
+}
 
-  // ========== TEXT SIZE BUTTONS ==========
-  document
-    .getElementById("decreaseText")
-    .addEventListener("click", function () {
-      textSize = Math.max(50, textSize - 10);
-      document.getElementById("textSizeDisplay").textContent = textSize + "%";
-      injectTextSize(textSize);
-    });
+function bindUI() {
+  bindStepper({
+    decreaseId: "decreaseText",
+    increaseId: "increaseText",
+    key: "textSize",
+    min: 50,
+    max: 200,
+    step: 10,
+    displayId: "textSizeDisplay",
+    format: (v) => `${v}%`,
+    onChange: (v) => injectTextSize(v),
+  });
 
-  document
-    .getElementById("increaseText")
-    .addEventListener("click", function () {
-      textSize = Math.min(200, textSize + 10);
-      document.getElementById("textSizeDisplay").textContent = textSize + "%";
-      injectTextSize(textSize);
-    });
+  bindStepper({
+    decreaseId: "decreaseSpacing",
+    increaseId: "increaseSpacing",
+    key: "letterSpacing",
+    min: 0,
+    max: 10,
+    step: 1,
+    displayId: "spacingDisplay",
+    format: (v) => `${v}px`,
+    onChange: (v) => injectLetterSpacing(v),
+  });
 
-  // ========== HIGH CONTRAST BUTTON ==========
-  document
-    .getElementById("toggleContrast")
-    .addEventListener("click", function () {
-      highContrastOn = !highContrastOn;
-      this.classList.toggle("active", highContrastOn);
-      injectHighContrast(highContrastOn);
-    });
+  bindStepper({
+    decreaseId: "decreaseLineHeight",
+    increaseId: "increaseLineHeight",
+    key: "lineHeight",
+    min: 1,
+    max: 3,
+    step: 0.25,
+    displayId: "lineHeightDisplay",
+    format: (v) => v.toFixed(2),
+    onChange: (v) => injectLineHeight(v),
+  });
 
-  // ========== DYSLEXIA FONT TOGGLE ==========
-  document
-    .getElementById("toggleDyslexia")
-    .addEventListener("click", function () {
-      dyslexiaFontOn = !dyslexiaFontOn;
-      this.classList.toggle("active", dyslexiaFontOn);
-      injectDyslexiaFont(dyslexiaFontOn);
-    });
+  bindStepper({
+    decreaseId: "decreaseRate",
+    increaseId: "increaseRate",
+    key: "speechRate",
+    min: 0.5,
+    max: 2.0,
+    step: 0.1,
+    displayId: "rateDisplay",
+    format: (v) => `${v.toFixed(1)}x`,
+  });
 
-  // ========== LETTER SPACING ==========
-  document
-    .getElementById("decreaseSpacing")
-    .addEventListener("click", function () {
-      letterSpacing = Math.max(0, letterSpacing - 1);
-      document.getElementById("spacingDisplay").textContent =
-        letterSpacing + "px";
-      injectLetterSpacing(letterSpacing);
-    });
+  bindToggle("toggleContrast", "highContrastOn", injectHighContrast);
+  bindToggle("toggleDyslexia", "dyslexiaFontOn", injectDyslexiaFont);
+  bindToggle("toggleReadingGuide", "readingGuideOn", injectReadingGuide);
+  bindToggle("toggleHighlightLinks", "highlightLinksOn", injectHighlightLinks);
+  bindToggle("toggleBigCursor", "bigCursorOn", injectBigCursor);
+  bindToggle("toggleVisualAlerts", "visualAlertsOn", injectVisualAlerts);
+  bindToggle("toggleFocusIndicator", "focusIndicatorOn", injectFocusIndicator);
 
-  document
-    .getElementById("increaseSpacing")
-    .addEventListener("click", function () {
-      letterSpacing = Math.min(10, letterSpacing + 1);
-      document.getElementById("spacingDisplay").textContent =
-        letterSpacing + "px";
-      injectLetterSpacing(letterSpacing);
-    });
-
-  // ========== LINE HEIGHT ==========
-  document
-    .getElementById("decreaseLineHeight")
-    .addEventListener("click", function () {
-      lineHeight = Math.max(1, lineHeight - 0.25);
-      document.getElementById("lineHeightDisplay").textContent =
-        lineHeight.toFixed(2);
-      injectLineHeight(lineHeight);
-    });
-
-  document
-    .getElementById("increaseLineHeight")
-    .addEventListener("click", function () {
-      lineHeight = Math.min(3, lineHeight + 0.25);
-      document.getElementById("lineHeightDisplay").textContent =
-        lineHeight.toFixed(2);
-      injectLineHeight(lineHeight);
-    });
-
-  // ========== READING GUIDE TOGGLE ==========
-  document
-    .getElementById("toggleReadingGuide")
-    .addEventListener("click", function () {
-      readingGuideOn = !readingGuideOn;
-      this.classList.toggle("active", readingGuideOn);
-      injectReadingGuide(readingGuideOn);
-    });
-
-  // ========== HIGHLIGHT LINKS TOGGLE ==========
-  document
-    .getElementById("toggleHighlightLinks")
-    .addEventListener("click", function () {
-      highlightLinksOn = !highlightLinksOn;
-      this.classList.toggle("active", highlightLinksOn);
-      injectHighlightLinks(highlightLinksOn);
-    });
-
-  // ========== BIG CURSOR TOGGLE ==========
-  document
-    .getElementById("toggleBigCursor")
-    .addEventListener("click", function () {
-      bigCursorOn = !bigCursorOn;
-      this.classList.toggle("active", bigCursorOn);
-      injectBigCursor(bigCursorOn);
-    });
-
-  // ========== COLOR BLINDNESS FILTERS ==========
-  document.querySelectorAll(".filter-btn").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      document.querySelectorAll(".filter-btn").forEach(function (b) {
+  document.querySelectorAll(".filter-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".filter-btn").forEach((b) => {
         b.classList.remove("active");
       });
-      this.classList.add("active");
-      currentFilter = this.id.replace("filter", "").toLowerCase();
-      injectColorFilter(currentFilter);
+      btn.classList.add("active");
+      state.currentFilter = btn.id.replace("filter", "").toLowerCase();
+      persistState();
+      injectColorFilter(state.currentFilter);
     });
   });
 
-  // ========== SPEECH RATE ==========
-  document
-    .getElementById("decreaseRate")
-    .addEventListener("click", function () {
-      speechRate = Math.max(0.5, speechRate - 0.1);
-      document.getElementById("rateDisplay").textContent =
-        speechRate.toFixed(1) + "x";
-    });
-
-  document
-    .getElementById("increaseRate")
-    .addEventListener("click", function () {
-      speechRate = Math.min(2.0, speechRate + 0.1);
-      document.getElementById("rateDisplay").textContent =
-        speechRate.toFixed(1) + "x";
-    });
-
-  // ========== VISUAL ALERTS TOGGLE ==========
-  document
-    .getElementById("toggleVisualAlerts")
-    .addEventListener("click", function () {
-      visualAlertsOn = !visualAlertsOn;
-      this.classList.toggle("active", visualAlertsOn);
-      injectVisualAlerts(visualAlertsOn);
-    });
-
-  // ========== FOCUS INDICATOR TOGGLE ==========
-  document
-    .getElementById("toggleFocusIndicator")
-    .addEventListener("click", function () {
-      focusIndicatorOn = !focusIndicatorOn;
-      this.classList.toggle("active", focusIndicatorOn);
-      injectFocusIndicator(focusIndicatorOn);
-    });
-
-  // ========== RESET BUTTON ==========
-  document.getElementById("resetBtn").addEventListener("click", function () {
-    // Reset all variables
-    textSize = 100;
-    highContrastOn = false;
-    dyslexiaFontOn = false;
-    letterSpacing = 0;
-    lineHeight = 1.5;
-    readingGuideOn = false;
-    highlightLinksOn = false;
-    bigCursorOn = false;
-    currentFilter = "none";
-    visualAlertsOn = false;
-    focusIndicatorOn = false;
-
-    // Reset displays
-    document.getElementById("textSizeDisplay").textContent = "100%";
-    document.getElementById("spacingDisplay").textContent = "0px";
-    document.getElementById("lineHeightDisplay").textContent = "1.50";
-
-    // Reset all toggle buttons
-    document.querySelectorAll(".toggle-btn").forEach(function (btn) {
-      btn.classList.remove("active");
-    });
-
-    // Reset filter buttons
-    document.querySelectorAll(".filter-btn").forEach(function (btn) {
-      btn.classList.remove("active");
-    });
-    document.getElementById("filterNone").classList.add("active");
-
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    state = { ...DEFAULT_STATE };
+    renderState();
+    persistState();
     injectReset();
   });
 
-  // ========== TEXT-TO-SPEECH ==========
-  // Load voices and pick the best one
-  var selectedVoice = null;
-
-  function pickBestVoice() {
-    var voices = window.speechSynthesis.getVoices();
-    if (!voices.length) return;
-
-    // Priority list: natural/premium voices first
-    var preferredNames = [
-      "Google US English",
-      "Google UK English Female",
-      "Google UK English Male",
-      "Microsoft Zira",
-      "Microsoft David",
-      "Samantha",
-      "Karen",
-      "Daniel",
-      "Alex",
-    ];
-
-    // Try to find a preferred voice
-    for (var i = 0; i < preferredNames.length; i++) {
-      for (var j = 0; j < voices.length; j++) {
-        if (voices[j].name.indexOf(preferredNames[i]) !== -1) {
-          selectedVoice = voices[j];
-          return;
-        }
-      }
-    }
-
-    // Fallback: pick first English voice that isn't espeak
-    for (var k = 0; k < voices.length; k++) {
-      if (
-        voices[k].lang.indexOf("en") === 0 &&
-        voices[k].name.indexOf("espeak") === -1
-      ) {
-        selectedVoice = voices[k];
-        return;
-      }
-    }
-
-    // Last resort: first available voice
-    selectedVoice = voices[0];
-  }
-
-  // Voices load asynchronously in Chrome
-  window.speechSynthesis.onvoiceschanged = pickBestVoice;
-  pickBestVoice();
-
-  function speakText(text) {
-    window.speechSynthesis.cancel();
-    var utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = speechRate;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
-    }
-    window.speechSynthesis.speak(utterance);
-  }
-
-  document.getElementById("speakBtn").addEventListener("click", function () {
-    var text = document.getElementById("textInput").value.trim();
-    if (text === "") {
+  document.getElementById("speakBtn").addEventListener("click", () => {
+    const text = document.getElementById("textInput").value.trim();
+    if (!text) {
       alert("Please type some text to read aloud.");
       return;
     }
     speakText(text);
   });
 
-  document
-    .getElementById("stopSpeakBtn")
-    .addEventListener("click", function () {
-      window.speechSynthesis.cancel();
-    });
+  document.getElementById("stopSpeakBtn").addEventListener("click", () => {
+    window.speechSynthesis.cancel();
+  });
 
-  // ========== READ SELECTED TEXT ==========
-  document
-    .getElementById("speakPageBtn")
-    .addEventListener("click", function () {
-      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        chrome.scripting.executeScript(
-          {
-            target: { tabId: tabs[0].id },
-            func: function () {
-              return window.getSelection().toString();
-            },
-          },
-          function (results) {
-            if (results && results[0] && results[0].result) {
-              var text = results[0].result.trim();
-              if (text) {
-                speakText(text);
-              } else {
-                alert("Please select some text on the page first.");
-              }
-            }
-          },
-        );
-      });
+  document.getElementById("speakPageBtn").addEventListener("click", () => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (!tabs[0]) return;
+      chrome.scripting.executeScript(
+        {
+          target: { tabId: tabs[0].id },
+          func: () => window.getSelection().toString(),
+        },
+        (results) => {
+          if (chrome.runtime.lastError) {
+            alert("Unable to read selection: " + chrome.runtime.lastError);
+            return;
+          }
+          const text = results && results[0] && results[0].result;
+          if (text && text.trim()) {
+            speakText(text.trim());
+          } else {
+            alert("Please select some text on the page first.");
+          }
+        },
+      );
     });
+  });
 
-  // ========== LIVE CAPTIONS ==========
   document
     .getElementById("startCaptionsBtn")
     .addEventListener("click", startCaptions);
@@ -324,10 +200,171 @@ document.addEventListener("DOMContentLoaded", function () {
   document
     .getElementById("clearCaptionsBtn")
     .addEventListener("click", clearCaptions);
-});
+
+  const voiceSelect = document.getElementById("voiceSelect");
+  voiceSelect.addEventListener("change", (e) => {
+    state.voiceName = e.target.value;
+    persistState();
+  });
+}
+
+function bindToggle(buttonId, key, injector) {
+  const btn = document.getElementById(buttonId);
+  btn.addEventListener("click", () => {
+    state[key] = !state[key];
+    renderState();
+    persistState();
+    if (injector) injector(state[key]);
+  });
+}
+
+function bindStepper({
+  decreaseId,
+  increaseId,
+  key,
+  min,
+  max,
+  step,
+  displayId,
+  format,
+  onChange,
+}) {
+  const dec = document.getElementById(decreaseId);
+  const inc = document.getElementById(increaseId);
+
+  function update(delta) {
+    const next = clamp(state[key] + delta, min, max);
+    state[key] = Number(next.toFixed(2));
+    renderState();
+    persistState();
+    if (onChange) onChange(state[key]);
+  }
+
+  dec.addEventListener("click", () => update(-step));
+  inc.addEventListener("click", () => update(step));
+
+  if (displayId) {
+    const display = document.getElementById(displayId);
+    display.textContent = format(state[key]);
+  }
+}
+
+function renderState() {
+  document.getElementById("textSizeDisplay").textContent = `${state.textSize}%`;
+  document.getElementById("spacingDisplay").textContent =
+    `${state.letterSpacing}px`;
+  document.getElementById("lineHeightDisplay").textContent =
+    state.lineHeight.toFixed(2);
+  document.getElementById("rateDisplay").textContent =
+    `${state.speechRate.toFixed(1)}x`;
+
+  setToggleUI("toggleContrast", state.highContrastOn);
+  setToggleUI("toggleDyslexia", state.dyslexiaFontOn);
+  setToggleUI("toggleReadingGuide", state.readingGuideOn);
+  setToggleUI("toggleHighlightLinks", state.highlightLinksOn);
+  setToggleUI("toggleBigCursor", state.bigCursorOn);
+  setToggleUI("toggleVisualAlerts", state.visualAlertsOn);
+  setToggleUI("toggleFocusIndicator", state.focusIndicatorOn);
+
+  document.querySelectorAll(".filter-btn").forEach((btn) => {
+    const val = btn.id.replace("filter", "").toLowerCase();
+    btn.classList.toggle("active", val === state.currentFilter);
+  });
+
+  syncVoiceSelect();
+}
+
+function setToggleUI(buttonId, active) {
+  const btn = document.getElementById(buttonId);
+  if (btn) {
+    btn.classList.toggle("active", active);
+  }
+}
+
+function applyAllToPage() {
+  injectTextSize(state.textSize);
+  injectHighContrast(state.highContrastOn);
+  injectDyslexiaFont(state.dyslexiaFontOn);
+  injectLetterSpacing(state.letterSpacing);
+  injectLineHeight(state.lineHeight);
+  injectReadingGuide(state.readingGuideOn);
+  injectHighlightLinks(state.highlightLinksOn);
+  injectBigCursor(state.bigCursorOn);
+  injectColorFilter(state.currentFilter);
+  injectVisualAlerts(state.visualAlertsOn);
+  injectFocusIndicator(state.focusIndicatorOn);
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
 
 // ============================================
-// INJECT TEXT SIZE INTO WEBSITE
+// TEXT TO SPEECH
+// ============================================
+async function hydrateVoices() {
+  voices = window.speechSynthesis.getVoices();
+  if (!voices.length) {
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, 400);
+      window.speechSynthesis.onvoiceschanged = () => {
+        voices = window.speechSynthesis.getVoices();
+        clearTimeout(timer);
+        resolve();
+      };
+    });
+  }
+  syncVoiceSelect();
+}
+
+function syncVoiceSelect() {
+  const select = document.getElementById("voiceSelect");
+  if (!select) return;
+  const englishVoices = voices.filter((v) => v.lang.startsWith("en"));
+  const list = englishVoices.length ? englishVoices : voices;
+  select.innerHTML = "";
+
+  const sorted = [...list].sort((a, b) => {
+    const premiumVendors = ["Google", "Microsoft", "Amazon", "Apple", "IBM"];
+    const score = (v) =>
+      (premiumVendors.some((vendor) => v.name.startsWith(vendor)) ? 1 : 0) +
+      (v.lang.startsWith("en-US") ? 1 : 0) +
+      (v.name.toLowerCase().includes("natural") ? 1 : 0);
+    return score(b) - score(a);
+  });
+
+  sorted.forEach((voice) => {
+    const option = document.createElement("option");
+    option.value = voice.name;
+    option.textContent = `${voice.name} (${voice.lang})`;
+    select.appendChild(option);
+  });
+
+  const preferred = sorted.find((v) => v.name === state.voiceName) || sorted[0];
+  if (preferred) {
+    state.voiceName = preferred.name;
+    select.value = preferred.name;
+  }
+}
+
+function pickVoice() {
+  if (!state.voiceName) return voices[0] || null;
+  return voices.find((v) => v.name === state.voiceName) || voices[0] || null;
+}
+
+function speakText(text) {
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = state.speechRate;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
+  const voice = pickVoice();
+  if (voice) utterance.voice = voice;
+  window.speechSynthesis.speak(utterance);
+}
+
+// ============================================
+// INJECTION HELPERS
 // ============================================
 function injectTextSize(size) {
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
@@ -425,9 +462,6 @@ function injectTextSize(size) {
   });
 }
 
-// ============================================
-// INJECT HIGH CONTRAST INTO WEBSITE
-// ============================================
 function injectHighContrast(enabled) {
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     if (!tabs[0]) return;
@@ -467,9 +501,6 @@ function injectHighContrast(enabled) {
   });
 }
 
-// ============================================
-// RESET WEBSITE
-// ============================================
 function injectReset() {
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     if (!tabs[0]) return;
@@ -510,9 +541,6 @@ function injectReset() {
   });
 }
 
-// ============================================
-// DYSLEXIA-FRIENDLY FONT
-// ============================================
 function injectDyslexiaFont(enabled) {
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     if (!tabs[0]) return;
@@ -540,9 +568,6 @@ function injectDyslexiaFont(enabled) {
   });
 }
 
-// ============================================
-// LETTER SPACING
-// ============================================
 function injectLetterSpacing(spacing) {
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     if (!tabs[0]) return;
@@ -572,9 +597,6 @@ function injectLetterSpacing(spacing) {
   });
 }
 
-// ============================================
-// LINE HEIGHT
-// ============================================
 function injectLineHeight(height) {
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     if (!tabs[0]) return;
@@ -602,9 +624,6 @@ function injectLineHeight(height) {
   });
 }
 
-// ============================================
-// READING GUIDE (follows cursor)
-// ============================================
 function injectReadingGuide(enabled) {
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     if (!tabs[0]) return;
@@ -635,9 +654,6 @@ function injectReadingGuide(enabled) {
   });
 }
 
-// ============================================
-// HIGHLIGHT LINKS
-// ============================================
 function injectHighlightLinks(enabled) {
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     if (!tabs[0]) return;
@@ -664,9 +680,6 @@ function injectHighlightLinks(enabled) {
   });
 }
 
-// ============================================
-// BIG CURSOR
-// ============================================
 function injectBigCursor(enabled) {
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     if (!tabs[0]) return;
@@ -693,9 +706,6 @@ function injectBigCursor(enabled) {
   });
 }
 
-// ============================================
-// COLOR BLINDNESS FILTERS
-// ============================================
 function injectColorFilter(filter) {
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     if (!tabs[0]) return;
@@ -745,9 +755,6 @@ function injectColorFilter(filter) {
   });
 }
 
-// ============================================
-// VISUAL ALERTS (screen flash)
-// ============================================
 function injectVisualAlerts(enabled) {
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     if (!tabs[0]) return;
@@ -774,9 +781,6 @@ function injectVisualAlerts(enabled) {
   });
 }
 
-// ============================================
-// ENHANCED FOCUS INDICATOR
-// ============================================
 function injectFocusIndicator(enabled) {
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     if (!tabs[0]) return;
@@ -806,10 +810,6 @@ function injectFocusIndicator(enabled) {
 // ============================================
 // LIVE CAPTIONS
 // ============================================
-var recognition = null;
-var isListening = false;
-var finalTranscript = "";
-
 function startCaptions() {
   var SpeechRecognition =
     window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -831,7 +831,7 @@ function startCaptions() {
       // Now start speech recognition
       initRecognition();
     })
-    .catch(function (err) {
+    .catch(function () {
       alert(
         "Microphone access denied. Please allow microphone access and try again.",
       );

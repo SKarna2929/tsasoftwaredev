@@ -264,6 +264,36 @@ body.dark-mode .size-btn:hover {
   color: var(--accent-primary);
 }
 
+/* Select Control */
+.select-control {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 170px;
+}
+
+.select-input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.select-input:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.select-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-align: right;
+}
+
 /* Toggle Button */
 .toggle-btn {
   background: none;
@@ -638,6 +668,12 @@ body.dark-mode .filter-btn.active {
 .action-btn:hover {
   border-color: var(--accent-primary);
   color: var(--accent-primary);
+}
+
+.a11y-status {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
 }
 
 /* Shortcuts List */

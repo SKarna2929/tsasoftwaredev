@@ -336,6 +336,54 @@ function injectTextSize(size) {
     chrome.scripting.executeScript({
       target: { tabId: tabs[0].id },
       func: function (sizePercent) {
+        var scale = sizePercent / 100;
+        var root = document.documentElement;
+        var body = document.body;
+
+        // Reset case
+        if (sizePercent === 100) {
+          root.style.removeProperty("font-size");
+          body.style.removeProperty("font-size");
+          root.removeAttribute("data-a11y-orig-fs");
+          body.removeAttribute("data-a11y-orig-fs");
+
+          var el = document.getElementById("a11y-helper-textsize");
+          if (el) el.textContent = "";
+          return;
+        }
+
+        // Store original computed font-sizes on first use
+        if (!root.hasAttribute("data-a11y-orig-fs")) {
+          root.setAttribute(
+            "data-a11y-orig-fs",
+            window.getComputedStyle(root).fontSize,
+          );
+        }
+        if (!body.hasAttribute("data-a11y-orig-fs")) {
+          body.setAttribute(
+            "data-a11y-orig-fs",
+            window.getComputedStyle(body).fontSize,
+          );
+        }
+
+        // Scale root and body font-size from their originals
+        // This proportionally scales all text using rem/em units
+        // without touching layout dimensions, images, or spacing in px
+        var rootOrig = parseFloat(root.getAttribute("data-a11y-orig-fs"));
+        var bodyOrig = parseFloat(body.getAttribute("data-a11y-orig-fs"));
+
+        root.style.setProperty(
+          "font-size",
+          rootOrig * scale + "px",
+          "important",
+        );
+        body.style.setProperty(
+          "font-size",
+          bodyOrig * scale + "px",
+          "important",
+        );
+
+        // Also inject a style rule for elements with hardcoded px font-sizes
         var el = document.getElementById("a11y-helper-textsize");
         if (!el) {
           el = document.createElement("style");
@@ -343,17 +391,34 @@ function injectTextSize(size) {
           document.head.appendChild(el);
         }
 
-        if (sizePercent === 100) {
-          el.textContent = "";
-          return;
-        }
-
-        // Use CSS zoom on the html element.
-        // This scales everything proportionally without breaking layouts,
-        // just like Ctrl+/- browser zoom but controlled programmatically.
-        var zoomLevel = sizePercent / 100;
-
-        el.textContent = "html { zoom: " + zoomLevel + " !important; }";
+        // Target common text elements that may use px sizing
+        // Use rem-based values so they scale from our adjusted root
+        // and never compound on nested elements
+        el.textContent =
+          "p, a, li, td, th, label, span, blockquote, figcaption, " +
+          "caption, pre, code, dt, dd, summary, legend { " +
+          "  font-size: " +
+          scale +
+          "em !important; " +
+          "}" +
+          "h1 { font-size: " +
+          2 * scale +
+          "em !important; }" +
+          "h2 { font-size: " +
+          1.5 * scale +
+          "em !important; }" +
+          "h3 { font-size: " +
+          1.17 * scale +
+          "em !important; }" +
+          "h4 { font-size: " +
+          1 * scale +
+          "em !important; }" +
+          "h5 { font-size: " +
+          0.83 * scale +
+          "em !important; }" +
+          "h6 { font-size: " +
+          0.67 * scale +
+          "em !important; }";
       },
       args: [size],
     });
@@ -433,6 +498,13 @@ function injectReset() {
         // Remove reading guide element
         var guide = document.getElementById("a11y-reading-guide");
         if (guide) guide.remove();
+        // Reset font-size overrides from text size feature
+        var root = document.documentElement;
+        var body = document.body;
+        root.style.removeProperty("font-size");
+        body.style.removeProperty("font-size");
+        root.removeAttribute("data-a11y-orig-fs");
+        body.removeAttribute("data-a11y-orig-fs");
       },
     });
   });

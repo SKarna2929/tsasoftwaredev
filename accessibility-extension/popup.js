@@ -212,16 +212,74 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   // ========== TEXT-TO-SPEECH ==========
+  // Load voices and pick the best one
+  var selectedVoice = null;
+
+  function pickBestVoice() {
+    var voices = window.speechSynthesis.getVoices();
+    if (!voices.length) return;
+
+    // Priority list: natural/premium voices first
+    var preferredNames = [
+      "Google US English",
+      "Google UK English Female",
+      "Google UK English Male",
+      "Microsoft Zira",
+      "Microsoft David",
+      "Samantha",
+      "Karen",
+      "Daniel",
+      "Alex",
+    ];
+
+    // Try to find a preferred voice
+    for (var i = 0; i < preferredNames.length; i++) {
+      for (var j = 0; j < voices.length; j++) {
+        if (voices[j].name.indexOf(preferredNames[i]) !== -1) {
+          selectedVoice = voices[j];
+          return;
+        }
+      }
+    }
+
+    // Fallback: pick first English voice that isn't espeak
+    for (var k = 0; k < voices.length; k++) {
+      if (
+        voices[k].lang.indexOf("en") === 0 &&
+        voices[k].name.indexOf("espeak") === -1
+      ) {
+        selectedVoice = voices[k];
+        return;
+      }
+    }
+
+    // Last resort: first available voice
+    selectedVoice = voices[0];
+  }
+
+  // Voices load asynchronously in Chrome
+  window.speechSynthesis.onvoiceschanged = pickBestVoice;
+  pickBestVoice();
+
+  function speakText(text) {
+    window.speechSynthesis.cancel();
+    var utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = speechRate;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    }
+    window.speechSynthesis.speak(utterance);
+  }
+
   document.getElementById("speakBtn").addEventListener("click", function () {
     var text = document.getElementById("textInput").value.trim();
     if (text === "") {
       alert("Please type some text to read aloud.");
       return;
     }
-    window.speechSynthesis.cancel();
-    var utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = speechRate;
-    window.speechSynthesis.speak(utterance);
+    speakText(text);
   });
 
   document
@@ -246,10 +304,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (results && results[0] && results[0].result) {
               var text = results[0].result.trim();
               if (text) {
-                window.speechSynthesis.cancel();
-                var utterance = new SpeechSynthesisUtterance(text);
-                utterance.rate = 1.0;
-                window.speechSynthesis.speak(utterance);
+                speakText(text);
               } else {
                 alert("Please select some text on the page first.");
               }
@@ -341,19 +396,20 @@ function injectHighContrast(enabled) {
           }
 
           el.textContent =
-            // Everything: black bg, white text
-            "* { background: #000 !important; color: #fff !important; border-color: #fff !important; box-shadow: none !important; text-shadow: none !important; }" +
-            // Links: yellow
-            "a { color: #ff0 !important; }" +
-            "a:hover, a:focus { color: #0ff !important; }" +
-            // Buttons: yellow outline
-            "button, [role='button'], input[type='submit'], input[type='button'] { color: #ff0 !important; border: 2px solid #ff0 !important; }" +
-            // Inputs: white border
-            "input, textarea, select { border: 2px solid #fff !important; }" +
-            // Focus: cyan outline
-            "*:focus { outline: 2px solid #0ff !important; }" +
-            // Images: visible
-            "img, video, svg { border: 2px solid #ff0 !important; background: transparent !important; }";
+            // Use CSS filter to invert the whole page
+            "html { filter: invert(1) hue-rotate(180deg) !important; background: #fff !important; }" +
+            // Re-invert images, videos, canvas, svg so they look normal
+            "img, video, canvas, svg, picture, [style*='background-image'], " +
+            ".img, figure img, iframe { filter: invert(1) hue-rotate(180deg) !important; }" +
+            // Boost contrast on text elements
+            "p, span, h1, h2, h3, h4, h5, h6, a, li, td, th, label, " +
+            "button, input, textarea, select, blockquote, figcaption { " +
+            "  contrast: 1.2 !important; }" +
+            // Make links more visible with underline
+            "a { text-decoration: underline !important; }" +
+            // Enhance focus visibility
+            "*:focus { outline: 3px solid #0ff !important; outline-offset: 2px !important; }" +
+            "*:focus-visible { outline: 3px solid #0ff !important; outline-offset: 2px !important; }";
         } else {
           if (el) el.remove();
         }

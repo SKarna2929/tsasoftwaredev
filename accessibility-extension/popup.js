@@ -839,11 +839,11 @@ function injectFocusIndicator(enabled) {
 }
 
 // ============================================
-// LIVE CAPTIONS - mic asked in the TAB (the webpage) so Chrome shows Allow
-// Words sent to popup via message so they appear in the box
+// LIVE CAPTIONS - tab writes to storage, popup polls so words always show
 // ============================================
 var isListening = false;
 var captionsTabId = null;
+var captionPollTimer = null;
 
 var CAPTIONS_MIC_DENIED_MSG =
   "Microphone access denied. Make sure you're on a normal webpage (e.g. google.com), then click the mic again and choose Allow when Chrome asks.";
@@ -858,13 +858,31 @@ function showCaptionInPopup(text) {
   }
 }
 
-// When the tab sends us spoken text, show it (and background stores it)
+function startCaptionPolling() {
+  if (captionPollTimer) return;
+  captionPollTimer = setInterval(function () {
+    if (!isListening) return;
+    chrome.storage.local.get(CAPTION_STORAGE_KEY, function (data) {
+      var t = data[CAPTION_STORAGE_KEY];
+      if (t) showCaptionInPopup(t);
+    });
+  }, 250);
+}
+
+function stopCaptionPolling() {
+  if (captionPollTimer) {
+    clearInterval(captionPollTimer);
+    captionPollTimer = null;
+  }
+}
+
 chrome.runtime.onMessage.addListener(function (msg) {
   if (msg.type === "a11yCaptionText") {
     showCaptionInPopup(msg.text);
   }
   if (msg.type === "a11yCaptionStarted") {
     isListening = true;
+    startCaptionPolling();
     var statusEl = document.getElementById("captionStatus");
     if (statusEl) {
       statusEl.className = "caption-status listening";
@@ -876,6 +894,7 @@ chrome.runtime.onMessage.addListener(function (msg) {
   }
   if (msg.type === "a11yCaptionDenied") {
     isListening = false;
+    stopCaptionPolling();
     alert(CAPTIONS_MIC_DENIED_MSG);
     var statusEl = document.getElementById("captionStatus");
     if (statusEl) {
@@ -884,6 +903,12 @@ chrome.runtime.onMessage.addListener(function (msg) {
       if (st) st.textContent = "Ready";
     }
     document.getElementById("startCaptionsBtn").classList.remove("active");
+  }
+});
+
+chrome.storage.onChanged.addListener(function (changes, area) {
+  if (area === "local" && changes[CAPTION_STORAGE_KEY]) {
+    showCaptionInPopup(changes[CAPTION_STORAGE_KEY].newValue);
   }
 });
 
@@ -913,10 +938,28 @@ function startCaptions() {
       return;
     }
     captionsTabId = tab.id;
+    isListening = true;
+    startCaptionPolling();
+    var statusEl = document.getElementById("captionStatus");
+    if (statusEl) {
+      statusEl.className = "caption-status listening";
+      var st = statusEl.querySelector(".status-text");
+      if (st) st.textContent = "Listening...";
+    }
+    document.getElementById("startCaptionsBtn").classList.add("active");
+
     chrome.scripting.executeScript(
       { target: { tabId: tab.id }, func: runLiveCaptionsInPage },
       function () {
         if (chrome.runtime.lastError) {
+          isListening = false;
+          stopCaptionPolling();
+          document.getElementById("startCaptionsBtn").classList.remove("active");
+          if (statusEl) {
+            statusEl.className = "caption-status idle";
+            var st = statusEl.querySelector(".status-text");
+            if (st) st.textContent = "Ready";
+          }
           alert("Cannot use captions on this page. Try a normal website like google.com.");
         }
       }
@@ -947,7 +990,9 @@ function runLiveCaptionsInPage() {
             interim += e.results[i][0].transcript;
           }
         }
-        chrome.runtime.sendMessage({ type: "a11yCaptionText", text: fullText + interim });
+        var text = fullText + interim;
+        chrome.storage.local.set({ a11yLiveCaptionText: text });
+        chrome.runtime.sendMessage({ type: "a11yCaptionText", text: text });
       };
       recognition.onerror = function (e) {
         if (e.error === "not-allowed") chrome.runtime.sendMessage({ type: "a11yCaptionDenied" });
@@ -969,6 +1014,7 @@ function runLiveCaptionsInPage() {
 
 function stopCaptions() {
   isListening = false;
+  stopCaptionPolling();
   if (captionsTabId) {
     try {
       chrome.scripting.executeScript({

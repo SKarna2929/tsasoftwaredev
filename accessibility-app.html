@@ -1,0 +1,818 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Accessibility Helper - Vision & Hearing Support</title>
+
+    <!-- 
+    ============================================
+    ACCESSIBILITY HELPER APPLICATION
+    ============================================
+    
+    PROJECT DESCRIPTION:
+    This is a simple web-based accessibility tool designed to help people 
+    with vision and hearing disabilities. It provides:
+    - Text-to-Speech for users who have difficulty reading
+    - Speech-to-Text for users who are deaf or hard of hearing
+    - Adjustable text sizes for users with low vision
+    - High-contrast mode for better visibility
+    
+    HOW THIS SOFTWARE REMOVES ACCESSIBILITY BARRIERS:
+    
+    1. TEXT-TO-SPEECH (Vision Barrier):
+       - Helps blind or low-vision users hear written content
+       - Assists users with reading difficulties like dyslexia
+       - Allows users to consume content without straining their eyes
+    
+    2. ADJUSTABLE TEXT SIZE (Vision Barrier):
+       - Users with low vision can enlarge text to a comfortable size
+       - Reduces eye strain and makes reading easier
+       - No need for external magnification tools
+    
+    3. HIGH-CONTRAST MODE (Vision Barrier):
+       - Improves readability for users with low vision
+       - Helps users with color blindness or light sensitivity
+       - Reduces visual fatigue in low-light conditions
+    
+    4. SPEECH-TO-TEXT / LIVE CAPTIONS (Hearing Barrier):
+       - Provides real-time captions for deaf/hard of hearing users
+       - Helps in noisy environments where audio is hard to hear
+       - Creates a visual record of spoken communication
+    
+    TECHNOLOGIES USED:
+    - HTML5 for structure
+    - CSS3 for styling
+    - JavaScript for interactivity
+    - Web Speech API (SpeechSynthesis) for text-to-speech
+    - Web Speech API (SpeechRecognition) for speech-to-text
+    
+    ============================================
+    -->
+
+    <style>
+      /* ============================================
+           CSS STYLES
+           ============================================ */
+
+      /* CSS Variables for easy theme switching */
+      :root {
+        --bg-color: #f5f5f5;
+        --text-color: #333333;
+        --primary-color: #2196f3;
+        --secondary-color: #4caf50;
+        --accent-color: #ff9800;
+        --border-color: #cccccc;
+        --card-bg: #ffffff;
+      }
+
+      /* High contrast mode colors */
+      .high-contrast {
+        --bg-color: #000000;
+        --text-color: #ffff00;
+        --primary-color: #00ffff;
+        --secondary-color: #00ff00;
+        --accent-color: #ff00ff;
+        --border-color: #ffff00;
+        --card-bg: #1a1a1a;
+      }
+
+      /* Base styles */
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: Arial, sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        line-height: 1.6;
+        padding: 20px;
+        transition: all 0.3s ease;
+      }
+
+      /* Main container */
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      /* Header styles */
+      header {
+        text-align: center;
+        margin-bottom: 30px;
+        padding: 20px;
+        background-color: var(--card-bg);
+        border-radius: 10px;
+        border: 2px solid var(--border-color);
+      }
+
+      h1 {
+        font-size: 2em;
+        margin-bottom: 10px;
+      }
+
+      .subtitle {
+        font-size: 1.1em;
+        opacity: 0.8;
+      }
+
+      /* Section card styles */
+      .section {
+        background-color: var(--card-bg);
+        border: 2px solid var(--border-color);
+        border-radius: 10px;
+        padding: 25px;
+        margin-bottom: 25px;
+      }
+
+      .section h2 {
+        font-size: 1.5em;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid var(--border-color);
+      }
+
+      /* Button styles */
+      button {
+        padding: 15px 25px;
+        font-size: 1.1em;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        margin: 5px;
+        transition: all 0.2s ease;
+        font-weight: bold;
+      }
+
+      button:hover {
+        transform: scale(1.05);
+        opacity: 0.9;
+      }
+
+      button:focus {
+        outline: 3px solid var(--accent-color);
+        outline-offset: 2px;
+      }
+
+      /* Primary button (blue) */
+      .btn-primary {
+        background-color: var(--primary-color);
+        color: white;
+      }
+
+      /* Secondary button (green) */
+      .btn-secondary {
+        background-color: var(--secondary-color);
+        color: white;
+      }
+
+      /* Accent button (orange) */
+      .btn-accent {
+        background-color: var(--accent-color);
+        color: white;
+      }
+
+      /* Stop button (red) */
+      .btn-stop {
+        background-color: #f44336;
+        color: white;
+      }
+
+      /* Text input area */
+      textarea {
+        width: 100%;
+        min-height: 150px;
+        padding: 15px;
+        font-size: 1.1em;
+        border: 2px solid var(--border-color);
+        border-radius: 8px;
+        resize: vertical;
+        background-color: var(--card-bg);
+        color: var(--text-color);
+        margin-bottom: 15px;
+      }
+
+      textarea:focus {
+        outline: 3px solid var(--primary-color);
+        outline-offset: 2px;
+      }
+
+      /* Button group container */
+      .button-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 15px;
+      }
+
+      /* Caption display area */
+      #captionDisplay {
+        width: 100%;
+        min-height: 120px;
+        padding: 20px;
+        font-size: 1.3em;
+        background-color: var(--card-bg);
+        border: 3px solid var(--border-color);
+        border-radius: 8px;
+        margin-top: 15px;
+      }
+
+      /* Status indicator */
+      .status {
+        display: inline-block;
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-size: 0.9em;
+        margin-top: 10px;
+      }
+
+      .status.listening {
+        background-color: #4caf50;
+        color: white;
+        animation: pulse 1.5s infinite;
+      }
+
+      .status.idle {
+        background-color: #9e9e9e;
+        color: white;
+      }
+
+      /* Pulse animation for listening indicator */
+      @keyframes pulse {
+        0% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+
+      /* Settings panel */
+      .settings {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        align-items: center;
+      }
+
+      /* Instructions text */
+      .instructions {
+        font-size: 0.95em;
+        opacity: 0.8;
+        margin-bottom: 15px;
+        padding: 10px;
+        background-color: var(--bg-color);
+        border-radius: 5px;
+      }
+
+      /* Responsive design for smaller screens */
+      @media (max-width: 600px) {
+        button {
+          width: 100%;
+          margin: 5px 0;
+        }
+
+        .button-group {
+          flex-direction: column;
+        }
+      }
+
+      /* Skip link for keyboard navigation */
+      .skip-link {
+        position: absolute;
+        top: -40px;
+        left: 0;
+        background: var(--primary-color);
+        color: white;
+        padding: 10px;
+        z-index: 100;
+      }
+
+      .skip-link:focus {
+        top: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Skip link for keyboard users to jump to main content -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <div class="container">
+      <!-- Header Section -->
+      <header>
+        <h1>♿ Accessibility Helper</h1>
+        <p class="subtitle">Making the web accessible for everyone</p>
+      </header>
+
+      <!-- Main Content -->
+      <main id="main-content">
+        <!-- Display Settings Section -->
+        <section class="section" aria-labelledby="settings-heading">
+          <h2 id="settings-heading">⚙️ Display Settings</h2>
+          <p class="instructions">
+            Adjust the display to match your needs. Use the buttons below to
+            change text size or switch to high-contrast mode.
+          </p>
+          <div class="settings">
+            <!-- Text size controls -->
+            <button
+              class="btn-primary"
+              onclick="changeTextSize(1)"
+              aria-label="Increase text size"
+            >
+              A+ Larger Text
+            </button>
+            <button
+              class="btn-primary"
+              onclick="changeTextSize(-1)"
+              aria-label="Decrease text size"
+            >
+              A- Smaller Text
+            </button>
+            <!-- High contrast toggle -->
+            <button
+              class="btn-accent"
+              onclick="toggleHighContrast()"
+              aria-label="Toggle high contrast mode"
+            >
+              🌓 High Contrast
+            </button>
+          </div>
+        </section>
+
+        <!-- Vision Accessibility Section - Text to Speech -->
+        <section class="section" aria-labelledby="vision-heading">
+          <h2 id="vision-heading">👁️ Vision Accessibility - Text to Speech</h2>
+          <p class="instructions">
+            Type or paste any text below, then click "Read Aloud" to hear it
+            spoken. This helps users who have difficulty reading text on screen.
+          </p>
+
+          <!-- Text input area -->
+          <label for="textInput" class="visually-hidden"
+            >Enter text to read aloud</label
+          >
+          <textarea
+            id="textInput"
+            placeholder="Type or paste your text here... Then click 'Read Aloud' to hear it!"
+            aria-describedby="tts-instructions"
+          >
+Welcome to the Accessibility Helper! This tool is designed to help people with vision and hearing disabilities. Try clicking the Read Aloud button to hear this text spoken.</textarea
+          >
+
+          <!-- Control buttons -->
+          <div class="button-group">
+            <button
+              class="btn-secondary"
+              onclick="speakText()"
+              aria-label="Read the text aloud"
+            >
+              🔊 Read Aloud
+            </button>
+            <button
+              class="btn-stop"
+              onclick="stopSpeaking()"
+              aria-label="Stop reading"
+            >
+              ⏹️ Stop Reading
+            </button>
+          </div>
+        </section>
+
+        <!-- Hearing Accessibility Section - Speech to Text -->
+        <section class="section" aria-labelledby="hearing-heading">
+          <h2 id="hearing-heading">👂 Hearing Accessibility - Live Captions</h2>
+          <p class="instructions">
+            Click "Start Captions" and speak into your microphone. Your speech
+            will be converted to text in real-time. This helps users who are
+            deaf or hard of hearing.
+          </p>
+
+          <!-- Caption control buttons -->
+          <div class="button-group">
+            <button
+              class="btn-secondary"
+              onclick="startCaptions()"
+              aria-label="Start live captions"
+            >
+              🎤 Start Captions
+            </button>
+            <button
+              class="btn-stop"
+              onclick="stopCaptions()"
+              aria-label="Stop live captions"
+            >
+              ⏹️ Stop Captions
+            </button>
+            <button
+              class="btn-primary"
+              onclick="clearCaptions()"
+              aria-label="Clear caption text"
+            >
+              🗑️ Clear Text
+            </button>
+          </div>
+
+          <!-- Status indicator -->
+          <div>
+            <span id="captionStatus" class="status idle">● Not Listening</span>
+          </div>
+
+          <!-- Caption display area -->
+          <div
+            id="captionDisplay"
+            role="log"
+            aria-live="polite"
+            aria-label="Live captions will appear here"
+          >
+            Your spoken words will appear here as captions...
+          </div>
+        </section>
+
+        <!-- Help Section -->
+        <section class="section" aria-labelledby="help-heading">
+          <h2 id="help-heading">❓ How to Use</h2>
+          <div style="line-height: 2">
+            <p><strong>For Vision Support:</strong></p>
+            <ul style="margin-left: 20px; margin-bottom: 15px">
+              <li>Use "A+ Larger Text" to make everything bigger</li>
+              <li>Use "High Contrast" for better visibility</li>
+              <li>Type text and click "Read Aloud" to hear it</li>
+            </ul>
+
+            <p><strong>For Hearing Support:</strong></p>
+            <ul style="margin-left: 20px; margin-bottom: 15px">
+              <li>Click "Start Captions" to begin speech recognition</li>
+              <li>Speak clearly into your microphone</li>
+              <li>Watch your words appear as text on screen</li>
+            </ul>
+
+            <p><strong>Browser Support:</strong></p>
+            <ul style="margin-left: 20px">
+              <li>Works best in Google Chrome or Microsoft Edge</li>
+              <li>Microphone access required for captions</li>
+            </ul>
+          </div>
+        </section>
+      </main>
+
+      <!-- Footer -->
+      <footer style="text-align: center; padding: 20px; opacity: 0.7">
+        <p>Accessibility Helper - Breaking Down Barriers Together</p>
+      </footer>
+    </div>
+
+    <!-- ============================================
+         JAVASCRIPT CODE
+         ============================================ -->
+    <script>
+      // ============================================
+      // GLOBAL VARIABLES
+      // ============================================
+
+      // Current text size level (default is 0, can go from -2 to 5)
+      let textSizeLevel = 0;
+
+      // Speech recognition object (will be created when needed)
+      let recognition = null;
+
+      // Flag to track if we're currently listening
+      let isListening = false;
+
+      // ============================================
+      // TEXT SIZE FUNCTIONS
+      // ============================================
+
+      /**
+       * Changes the text size of the entire page
+       * @param {number} change - The amount to change (1 for bigger, -1 for smaller)
+       */
+      function changeTextSize(change) {
+        // Update the size level (keep it between -2 and 5)
+        textSizeLevel = Math.max(-2, Math.min(5, textSizeLevel + change));
+
+        // Calculate the new font size (base is 16px, each level adds/removes 4px)
+        const newSize = 16 + textSizeLevel * 4;
+
+        // Apply the new font size to the body
+        document.body.style.fontSize = newSize + "px";
+
+        // Announce the change for screen readers
+        announceToScreenReader("Text size changed to " + newSize + " pixels");
+
+        // Log for debugging
+        console.log("Text size changed to: " + newSize + "px");
+      }
+
+      // ============================================
+      // HIGH CONTRAST MODE FUNCTIONS
+      // ============================================
+
+      /**
+       * Toggles the high contrast mode on and off
+       * High contrast uses a black background with yellow text
+       * This helps users with low vision or light sensitivity
+       */
+      function toggleHighContrast() {
+        // Toggle the 'high-contrast' class on the body element
+        document.body.classList.toggle("high-contrast");
+
+        // Check if high contrast is now enabled
+        const isHighContrast =
+          document.body.classList.contains("high-contrast");
+
+        // Announce the change for screen readers
+        if (isHighContrast) {
+          announceToScreenReader("High contrast mode enabled");
+        } else {
+          announceToScreenReader("High contrast mode disabled");
+        }
+
+        // Log for debugging
+        console.log("High contrast mode: " + (isHighContrast ? "ON" : "OFF"));
+      }
+
+      // ============================================
+      // TEXT-TO-SPEECH FUNCTIONS (Vision Accessibility)
+      // ============================================
+
+      /**
+       * Reads the text from the textarea using the browser's
+       * built-in Speech Synthesis API
+       * This helps users who have difficulty reading
+       */
+      function speakText() {
+        // Get the text from the textarea
+        const textInput = document.getElementById("textInput");
+        const text = textInput.value.trim();
+
+        // Check if there's any text to read
+        if (text === "") {
+          alert("Please enter some text to read aloud.");
+          return;
+        }
+
+        // Stop any current speech first
+        window.speechSynthesis.cancel();
+
+        // Create a new speech utterance (the thing to be spoken)
+        const utterance = new SpeechSynthesisUtterance(text);
+
+        // Configure the speech settings
+        utterance.rate = 0.9; // Speed: 0.1 to 10 (1 is normal)
+        utterance.pitch = 1; // Pitch: 0 to 2 (1 is normal)
+        utterance.volume = 1; // Volume: 0 to 1
+
+        // Event handler when speech starts
+        utterance.onstart = function () {
+          console.log("Started speaking");
+        };
+
+        // Event handler when speech ends
+        utterance.onend = function () {
+          console.log("Finished speaking");
+        };
+
+        // Event handler for errors
+        utterance.onerror = function (event) {
+          console.error("Speech error:", event.error);
+          alert("Sorry, there was an error with text-to-speech.");
+        };
+
+        // Start speaking!
+        window.speechSynthesis.speak(utterance);
+
+        // Log for debugging
+        console.log("Speaking text: " + text.substring(0, 50) + "...");
+      }
+
+      /**
+       * Stops any current speech
+       */
+      function stopSpeaking() {
+        // Cancel all speech in the queue
+        window.speechSynthesis.cancel();
+        console.log("Speech stopped");
+      }
+
+      // ============================================
+      // SPEECH-TO-TEXT FUNCTIONS (Hearing Accessibility)
+      // ============================================
+
+      /**
+       * Starts the live caption feature
+       * Uses the Web Speech Recognition API to convert
+       * spoken words into text in real-time
+       * This helps users who are deaf or hard of hearing
+       */
+      function startCaptions() {
+        // Check if browser supports speech recognition
+        // Note: This API works in Chrome, Edge, and some other browsers
+        const SpeechRecognition =
+          window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (!SpeechRecognition) {
+          alert(
+            "Sorry, your browser does not support speech recognition. Please try Chrome or Edge.",
+          );
+          return;
+        }
+
+        // If already listening, don't start again
+        if (isListening) {
+          console.log("Already listening");
+          return;
+        }
+
+        // Create a new speech recognition instance
+        recognition = new SpeechRecognition();
+
+        // Configure the recognition settings
+        recognition.continuous = true; // Keep listening (don't stop after one phrase)
+        recognition.interimResults = true; // Show results while still speaking
+        recognition.lang = "en-US"; // Set the language
+
+        // Get reference to the caption display area
+        const captionDisplay = document.getElementById("captionDisplay");
+        const captionStatus = document.getElementById("captionStatus");
+
+        // Store the final transcript
+        let finalTranscript = "";
+
+        // Event handler when recognition starts
+        recognition.onstart = function () {
+          isListening = true;
+          captionStatus.textContent = "● Listening...";
+          captionStatus.className = "status listening";
+          console.log("Speech recognition started");
+        };
+
+        // Event handler when we get results
+        recognition.onresult = function (event) {
+          let interimTranscript = "";
+
+          // Loop through all the results
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+
+            if (event.results[i].isFinal) {
+              // This is a final result (user finished speaking a phrase)
+              finalTranscript += transcript + " ";
+            } else {
+              // This is an interim result (user is still speaking)
+              interimTranscript += transcript;
+            }
+          }
+
+          // Display both final and interim results
+          // Interim results are shown in gray italic
+          captionDisplay.innerHTML =
+            finalTranscript +
+            '<span style="color: gray; font-style: italic;">' +
+            interimTranscript +
+            "</span>";
+
+          // Auto-scroll to show latest text
+          captionDisplay.scrollTop = captionDisplay.scrollHeight;
+        };
+
+        // Event handler for errors
+        recognition.onerror = function (event) {
+          console.error("Recognition error:", event.error);
+
+          if (event.error === "not-allowed") {
+            alert(
+              "Microphone access was denied. Please allow microphone access and try again.",
+            );
+          } else if (event.error === "no-speech") {
+            console.log("No speech detected");
+          } else {
+            alert("Speech recognition error: " + event.error);
+          }
+        };
+
+        // Event handler when recognition ends
+        recognition.onend = function () {
+          // If we're supposed to be listening, restart
+          // (recognition can stop automatically sometimes)
+          if (isListening) {
+            try {
+              recognition.start();
+            } catch (e) {
+              console.log("Could not restart recognition");
+              isListening = false;
+              captionStatus.textContent = "● Not Listening";
+              captionStatus.className = "status idle";
+            }
+          } else {
+            captionStatus.textContent = "● Not Listening";
+            captionStatus.className = "status idle";
+          }
+          console.log("Speech recognition ended");
+        };
+
+        // Start listening!
+        try {
+          recognition.start();
+        } catch (e) {
+          console.error("Error starting recognition:", e);
+          alert("Could not start speech recognition. Please try again.");
+        }
+      }
+
+      /**
+       * Stops the live caption feature
+       */
+      function stopCaptions() {
+        isListening = false;
+
+        if (recognition) {
+          recognition.stop();
+          console.log("Captions stopped");
+        }
+
+        // Update the status indicator
+        const captionStatus = document.getElementById("captionStatus");
+        captionStatus.textContent = "● Not Listening";
+        captionStatus.className = "status idle";
+      }
+
+      /**
+       * Clears the caption display area
+       */
+      function clearCaptions() {
+        const captionDisplay = document.getElementById("captionDisplay");
+        captionDisplay.innerHTML =
+          "Your spoken words will appear here as captions...";
+        console.log("Captions cleared");
+      }
+
+      // ============================================
+      // UTILITY FUNCTIONS
+      // ============================================
+
+      /**
+       * Announces a message to screen readers
+       * This helps blind users know when something has changed
+       * @param {string} message - The message to announce
+       */
+      function announceToScreenReader(message) {
+        // Create a temporary element for the announcement
+        const announcement = document.createElement("div");
+        announcement.setAttribute("role", "status");
+        announcement.setAttribute("aria-live", "polite");
+        announcement.setAttribute("aria-atomic", "true");
+        announcement.style.position = "absolute";
+        announcement.style.left = "-10000px";
+        announcement.style.width = "1px";
+        announcement.style.height = "1px";
+        announcement.style.overflow = "hidden";
+        announcement.textContent = message;
+
+        // Add to page, then remove after announcement
+        document.body.appendChild(announcement);
+        setTimeout(function () {
+          document.body.removeChild(announcement);
+        }, 1000);
+      }
+
+      // ============================================
+      // INITIALIZATION
+      // ============================================
+
+      // When the page loads, check browser support
+      window.onload = function () {
+        console.log("Accessibility Helper loaded!");
+
+        // Check for Speech Synthesis support
+        if ("speechSynthesis" in window) {
+          console.log("✓ Text-to-Speech is supported");
+        } else {
+          console.warn("✗ Text-to-Speech is NOT supported");
+        }
+
+        // Check for Speech Recognition support
+        if (
+          "SpeechRecognition" in window ||
+          "webkitSpeechRecognition" in window
+        ) {
+          console.log("✓ Speech Recognition is supported");
+        } else {
+          console.warn("✗ Speech Recognition is NOT supported");
+        }
+      };
+
+      // Fix for Chrome bug where speech synthesis stops working
+      // after speaking for a while
+      window.onbeforeunload = function () {
+        window.speechSynthesis.cancel();
+      };
+    </script>
+  </body>
+</html>

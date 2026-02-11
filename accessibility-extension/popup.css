@@ -558,6 +558,38 @@ body::-webkit-scrollbar-thumb {
   display: block;
 }
 
+/* Translate Page bar — compact, always at top of Speech tab */
+.translate-page-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: rgba(0, 180, 255, 0.06);
+  border: 1px solid var(--border);
+  clip-path: var(--hud-clip);
+}
+.translate-page-label {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--arc-300);
+  white-space: nowrap;
+}
+.translate-page-select {
+  flex: 1;
+  min-width: 100px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+.translate-page-btn {
+  padding: 6px 10px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
 @keyframes panelBoot {
   0% {
     opacity: 0;

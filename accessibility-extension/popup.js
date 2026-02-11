@@ -18,8 +18,19 @@ var ttsVoiceName = "";
 var visualAlertsOn = false;
 var focusIndicatorOn = false;
 
+// When background stores new caption text, update display (so words show even if popup missed the message)
+chrome.storage.onChanged.addListener(function (changes, area) {
+  if (area === "local" && changes[CAPTION_STORAGE_KEY]) {
+    showCaptionInPopup(changes[CAPTION_STORAGE_KEY].newValue);
+  }
+});
+
 // Wait for DOM
 document.addEventListener("DOMContentLoaded", function () {
+  // Show any caption text we have when popup opens
+  chrome.storage.local.get(CAPTION_STORAGE_KEY, function (data) {
+    if (data[CAPTION_STORAGE_KEY]) showCaptionInPopup(data[CAPTION_STORAGE_KEY]);
+  });
   // ========== DARK MODE TOGGLE ==========
   var savedTheme = localStorage.getItem("theme");
   if (savedTheme === "dark") {
@@ -837,14 +848,20 @@ var captionsTabId = null;
 var CAPTIONS_MIC_DENIED_MSG =
   "Microphone access denied. Make sure you're on a normal webpage (e.g. google.com), then click the mic again and choose Allow when Chrome asks.";
 
-// When the tab sends us spoken text, show it in the popup
+var CAPTION_STORAGE_KEY = "a11yLiveCaptionText";
+
+function showCaptionInPopup(text) {
+  var display = document.getElementById("captionDisplay");
+  if (display) {
+    display.textContent = text || "";
+    display.scrollTop = display.scrollHeight;
+  }
+}
+
+// When the tab sends us spoken text, show it (and background stores it)
 chrome.runtime.onMessage.addListener(function (msg) {
   if (msg.type === "a11yCaptionText") {
-    var display = document.getElementById("captionDisplay");
-    if (display) {
-      display.textContent = msg.text || "";
-      display.scrollTop = display.scrollHeight;
-    }
+    showCaptionInPopup(msg.text);
   }
   if (msg.type === "a11yCaptionStarted") {
     isListening = true;
@@ -882,6 +899,7 @@ function startCaptions() {
     display.textContent = "";
     display.innerHTML = "";
   }
+  chrome.storage.local.set({ [CAPTION_STORAGE_KEY]: "" });
 
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     var tab = tabs[0];
@@ -976,6 +994,7 @@ function stopCaptions() {
   if (display) {
     display.innerHTML = "<span class=\"placeholder-text\">Your words will appear here...</span>";
   }
+  chrome.storage.local.set({ [CAPTION_STORAGE_KEY]: "" });
   var btn = document.getElementById("startCaptionsBtn");
   if (btn) btn.classList.remove("active");
 }

@@ -1,173 +1,728 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Live Captions - Accessibility Helper</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0f172a;
-      color: #f1f5f9;
-      min-height: 100vh;
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-    h1 {
-      font-size: 20px;
-      margin-bottom: 16px;
-      color: #93c5fd;
-    }
-    .status {
-      font-size: 14px;
-      margin-bottom: 12px;
-      color: #94a3b8;
-    }
-    .status.listening { color: #4ade80; }
-    .words-box {
-      width: 100%;
-      max-width: 600px;
-      min-height: 200px;
-      max-height: 400px;
-      padding: 20px;
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 12px;
-      font-size: 18px;
-      line-height: 1.6;
-      overflow-y: auto;
-      margin-bottom: 20px;
-    }
-    .words-box.placeholder { color: #64748b; font-style: italic; }
-    .buttons {
-      display: flex;
-      gap: 12px;
-    }
-    button {
-      padding: 12px 24px;
-      font-size: 16px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 500;
-    }
-    .start-btn {
-      background: #2563eb;
-      color: white;
-    }
-    .start-btn:hover { background: #1d4ed8; }
-    .stop-btn {
-      background: #475569;
-      color: white;
-    }
-    .stop-btn:hover { background: #64748b; }
-    .error { color: #f87171; margin-top: 12px; }
-  </style>
-</head>
-<body>
-  <h1>Live Captions</h1>
-  <p id="status" class="status">Click Start, allow the microphone, then speak.</p>
-  <div id="words" class="words-box placeholder">Your words will appear here when you speak.</div>
-  <div class="buttons">
-    <button id="startBtn" class="start-btn">Start listening</button>
-    <button id="stopBtn" class="stop-btn">Stop</button>
-  </div>
-  <p id="error" class="error"></p>
-
-  <script>
-    var recognition = null;
-    var stream = null;
-    var fullText = "";
-    var isListening = false;
-
-    var wordsEl = document.getElementById("words");
-    var statusEl = document.getElementById("status");
-    var errorEl = document.getElementById("error");
-
-    function startListening() {
-      if (isListening) return;
-      errorEl.textContent = "";
-      wordsEl.textContent = "";
-      wordsEl.classList.remove("placeholder");
-      fullText = "";
-
-      if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
-        errorEl.textContent = "Speech recognition not supported. Use Chrome.";
-        return;
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>A.E.G.I.S. — Live Transcription HUD</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
       }
 
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(function (s) {
-          stream = s;
-          var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-          recognition = new SpeechRecognition();
-          recognition.continuous = true;
-          recognition.interimResults = true;
-          recognition.lang = "en-US";
-
-          recognition.onresult = function (e) {
-            var interim = "";
-            for (var i = e.resultIndex; i < e.results.length; i++) {
-              if (e.results[i].isFinal) {
-                fullText += e.results[i][0].transcript + " ";
-              } else {
-                interim += e.results[i][0].transcript;
-              }
-            }
-            wordsEl.textContent = fullText + interim;
-            wordsEl.scrollTop = wordsEl.scrollHeight;
-          };
-
-          recognition.onerror = function (e) {
-            if (e.error === "not-allowed") {
-              errorEl.textContent = "Microphone denied. Click the lock/info in the address bar and allow the microphone.";
-            }
-            stopListening();
-          };
-
-          recognition.onend = function () {
-            if (isListening && recognition) {
-              try { recognition.start(); } catch (err) {}
-            }
-          };
-
-          isListening = true;
-          statusEl.textContent = "Listening...";
-          statusEl.classList.add("listening");
-          recognition.start();
-        })
-        .catch(function () {
-          errorEl.textContent = "Microphone denied. Allow the microphone for this page and try again.";
-        });
-    }
-
-    document.getElementById("startBtn").onclick = startListening;
-
-    if (window.location.search.indexOf("start=1") !== -1) {
-      setTimeout(startListening, 300);
-    }
-
-    document.getElementById("stopBtn").onclick = function () {
-      stopListening();
-    };
-
-    function stopListening() {
-      isListening = false;
-      if (recognition) {
-        try { recognition.stop(); } catch (e) {}
-        recognition = null;
+      :root {
+        --arc-300: #4dcfff;
+        --arc-400: #1ac2ff;
+        --arc-500: #00b4ff;
+        --hud-green: #00ff88;
+        --hud-green-glow: rgba(0, 255, 136, 0.35);
+        --hud-red: #ff3333;
+        --text-primary: #c8e6ff;
+        --text-muted: #3d6b8a;
+        --border: rgba(0, 180, 255, 0.18);
+        --glow-arc: rgba(0, 180, 255, 0.5);
+        --hud-clip: polygon(
+          12px 0%,
+          calc(100% - 12px) 0%,
+          100% 12px,
+          100% calc(100% - 12px),
+          calc(100% - 12px) 100%,
+          12px 100%,
+          0% calc(100% - 12px),
+          0% 12px
+        );
       }
-      if (stream) {
-        try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
-        stream = null;
+
+      body {
+        font-family: "Rajdhani", sans-serif;
+        background: #020810;
+        color: var(--text-primary);
+        min-height: 100vh;
+        overflow: hidden;
       }
-      statusEl.textContent = "Stopped.";
-      statusEl.classList.remove("listening");
-    }
-  </script>
-</body>
+
+      /* Animated background */
+      body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background:
+          radial-gradient(
+            ellipse at 30% 20%,
+            rgba(0, 180, 255, 0.05) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            ellipse at 70% 80%,
+            rgba(0, 122, 204, 0.03) 0%,
+            transparent 50%
+          ),
+          linear-gradient(180deg, #020810, #04101e 50%, #020a14);
+        z-index: -2;
+      }
+
+      /* Scanlines */
+      body::after {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 2px,
+          rgba(0, 180, 255, 0.012) 2px,
+          rgba(0, 180, 255, 0.012) 4px
+        );
+        z-index: 9999;
+        pointer-events: none;
+        animation: scanDrift 8s linear infinite;
+      }
+
+      @keyframes scanDrift {
+        0% {
+          transform: translateY(0);
+        }
+        100% {
+          transform: translateY(4px);
+        }
+      }
+
+      /* Corner brackets */
+      .corner-tl,
+      .corner-tr,
+      .corner-bl,
+      .corner-br {
+        position: fixed;
+        width: 50px;
+        height: 50px;
+        border-color: var(--arc-500);
+        border-style: solid;
+        opacity: 0.3;
+        z-index: 10;
+      }
+      .corner-tl {
+        top: 10px;
+        left: 10px;
+        border-width: 2px 0 0 2px;
+      }
+      .corner-tr {
+        top: 10px;
+        right: 10px;
+        border-width: 2px 2px 0 0;
+      }
+      .corner-bl {
+        bottom: 10px;
+        left: 10px;
+        border-width: 0 0 2px 2px;
+      }
+      .corner-br {
+        bottom: 10px;
+        right: 10px;
+        border-width: 0 2px 2px 0;
+      }
+
+      .container {
+        display: flex;
+        flex-direction: column;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        height: 100vh;
+      }
+
+      /* Header */
+      .hud-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 16px;
+        margin-bottom: 16px;
+        position: relative;
+      }
+
+      .hud-header::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--arc-500) 20%,
+          var(--arc-300) 50%,
+          var(--arc-500) 80%,
+          transparent
+        );
+        box-shadow: 0 0 8px var(--glow-arc);
+        animation: hudLine 4s ease-in-out infinite;
+      }
+
+      @keyframes hudLine {
+        0%,
+        100% {
+          opacity: 0.5;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+
+      .hud-header .title-area {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      /* Mini arc reactor */
+      .mini-reactor {
+        width: 36px;
+        height: 36px;
+        border: 2px solid var(--arc-500);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(
+          circle,
+          rgba(0, 180, 255, 0.2),
+          transparent 70%
+        );
+        box-shadow: 0 0 15px var(--glow-arc);
+        animation: reactorPulse 3s ease-in-out infinite;
+        position: relative;
+      }
+
+      .mini-reactor::before {
+        content: "";
+        position: absolute;
+        inset: 3px;
+        border: 1px dashed rgba(0, 180, 255, 0.3);
+        border-radius: 50%;
+        animation: spin 12s linear infinite;
+      }
+
+      .mini-reactor::after {
+        content: "";
+        width: 10px;
+        height: 10px;
+        background: radial-gradient(circle, var(--arc-300), var(--arc-500));
+        border-radius: 50%;
+        box-shadow: 0 0 10px var(--glow-arc);
+      }
+
+      @keyframes reactorPulse {
+        0%,
+        100% {
+          box-shadow: 0 0 15px var(--glow-arc);
+        }
+        50% {
+          box-shadow: 0 0 25px rgba(0, 180, 255, 0.8);
+        }
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .hud-header h1 {
+        font-family: "Orbitron", sans-serif;
+        font-size: 16px;
+        font-weight: 800;
+        letter-spacing: 2px;
+        color: var(--arc-300);
+        text-shadow: 0 0 10px var(--glow-arc);
+      }
+
+      .hud-header .subtitle {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 9px;
+        color: var(--text-muted);
+        letter-spacing: 2px;
+      }
+
+      .hud-header .status-badge {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 14px;
+        border: 1px solid var(--border);
+        font-family: "Share Tech Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 1px;
+        color: var(--text-muted);
+        clip-path: var(--hud-clip);
+      }
+
+      .hud-header .status-badge.active {
+        border-color: var(--hud-green);
+        color: var(--hud-green);
+        background: rgba(0, 255, 136, 0.06);
+        box-shadow: 0 0 10px var(--hud-green-glow);
+      }
+
+      .status-badge .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--text-muted);
+      }
+      .status-badge.active .dot {
+        background: var(--hud-green);
+        box-shadow: 0 0 8px var(--hud-green-glow);
+        animation: blink 1.2s ease-in-out infinite;
+      }
+      @keyframes blink {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.3;
+        }
+      }
+
+      /* Controls */
+      .controls {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+
+      .ctrl-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border: 1px solid var(--border);
+        background: rgba(0, 180, 255, 0.05);
+        font-family: "Rajdhani", sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--text-primary);
+        cursor: pointer;
+        clip-path: var(--hud-clip);
+        transition: all 0.2s ease;
+      }
+
+      .ctrl-btn:hover {
+        border-color: var(--arc-400);
+        background: rgba(0, 180, 255, 0.1);
+        box-shadow: 0 0 12px rgba(0, 180, 255, 0.15);
+      }
+
+      .ctrl-btn.start {
+        border-color: rgba(0, 255, 136, 0.3);
+      }
+      .ctrl-btn.start:hover {
+        border-color: var(--hud-green);
+        background: rgba(0, 255, 136, 0.08);
+        box-shadow: 0 0 12px var(--hud-green-glow);
+        color: var(--hud-green);
+      }
+
+      .ctrl-btn.stop {
+        border-color: rgba(255, 51, 51, 0.3);
+      }
+      .ctrl-btn.stop:hover {
+        border-color: var(--hud-red);
+        background: rgba(255, 51, 51, 0.08);
+        box-shadow: 0 0 12px rgba(255, 51, 51, 0.3);
+        color: var(--hud-red);
+      }
+
+      .ctrl-btn.clear:hover {
+        color: var(--arc-300);
+      }
+
+      /* Font size controls */
+      .font-controls {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: auto;
+      }
+
+      .font-btn {
+        width: 28px;
+        height: 28px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--arc-400);
+        font-family: "Orbitron", sans-serif;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        clip-path: polygon(
+          4px 0,
+          calc(100% - 4px) 0,
+          100% 4px,
+          100% calc(100% - 4px),
+          calc(100% - 4px) 100%,
+          4px 100%,
+          0 calc(100% - 4px),
+          0 4px
+        );
+      }
+      .font-btn:hover {
+        border-color: var(--arc-400);
+        color: var(--arc-200);
+        box-shadow: 0 0 8px rgba(0, 180, 255, 0.15);
+      }
+
+      .font-label {
+        font-family: "Orbitron", sans-serif;
+        font-size: 10px;
+        color: var(--arc-300);
+        letter-spacing: 1px;
+      }
+
+      /* Transcript area */
+      .transcript-area {
+        flex: 1;
+        background: rgba(0, 180, 255, 0.03);
+        border: 1px solid var(--border);
+        clip-path: var(--hud-clip);
+        padding: 20px;
+        overflow-y: auto;
+        line-height: 1.8;
+        font-size: 18px;
+        position: relative;
+      }
+
+      .transcript-area::-webkit-scrollbar {
+        width: 4px;
+      }
+      .transcript-area::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .transcript-area::-webkit-scrollbar-thumb {
+        background: var(--arc-500);
+        border-radius: 2px;
+      }
+
+      .transcript-area .placeholder {
+        font-family: "Share Tech Mono", monospace;
+        color: var(--text-muted);
+        font-size: 14px;
+        letter-spacing: 1px;
+      }
+
+      .transcript-text {
+        color: var(--text-primary);
+      }
+
+      /* Waveform decoration */
+      .wave-decoration {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        padding: 10px 0;
+      }
+
+      .wave-decoration .bar {
+        width: 3px;
+        background: var(--arc-500);
+        box-shadow: 0 0 4px var(--glow-arc);
+        opacity: 0.2;
+        animation: waveIdle 1.5s ease-in-out infinite;
+      }
+      .wave-decoration .bar:nth-child(1) {
+        height: 8px;
+        animation-delay: 0s;
+      }
+      .wave-decoration .bar:nth-child(2) {
+        height: 14px;
+        animation-delay: 0.1s;
+      }
+      .wave-decoration .bar:nth-child(3) {
+        height: 22px;
+        animation-delay: 0.2s;
+      }
+      .wave-decoration .bar:nth-child(4) {
+        height: 18px;
+        animation-delay: 0.3s;
+      }
+      .wave-decoration .bar:nth-child(5) {
+        height: 26px;
+        animation-delay: 0.15s;
+      }
+      .wave-decoration .bar:nth-child(6) {
+        height: 18px;
+        animation-delay: 0.25s;
+      }
+      .wave-decoration .bar:nth-child(7) {
+        height: 22px;
+        animation-delay: 0.35s;
+      }
+      .wave-decoration .bar:nth-child(8) {
+        height: 14px;
+        animation-delay: 0.1s;
+      }
+      .wave-decoration .bar:nth-child(9) {
+        height: 8px;
+        animation-delay: 0.05s;
+      }
+
+      .wave-decoration.active .bar {
+        opacity: 1;
+        animation-name: waveActive;
+      }
+
+      @keyframes waveIdle {
+        0%,
+        100% {
+          transform: scaleY(0.4);
+          opacity: 0.2;
+        }
+        50% {
+          transform: scaleY(0.6);
+          opacity: 0.3;
+        }
+      }
+      @keyframes waveActive {
+        0%,
+        100% {
+          transform: scaleY(0.3);
+        }
+        50% {
+          transform: scaleY(1.5);
+        }
+      }
+
+      /* Footer */
+      .hud-footer {
+        text-align: center;
+        padding: 12px 0 4px;
+        font-family: "Share Tech Mono", monospace;
+        font-size: 9px;
+        color: var(--text-muted);
+        letter-spacing: 2px;
+      }
+      .hud-footer .brand {
+        font-family: "Orbitron", sans-serif;
+        font-weight: 800;
+        color: var(--arc-400);
+        text-shadow: 0 0 8px var(--glow-arc);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Corner brackets -->
+    <div class="corner-tl"></div>
+    <div class="corner-tr"></div>
+    <div class="corner-bl"></div>
+    <div class="corner-br"></div>
+
+    <div class="container">
+      <!-- Header -->
+      <div class="hud-header">
+        <div class="title-area">
+          <div class="mini-reactor"></div>
+          <div>
+            <h1>LIVE TRANSCRIPTION</h1>
+            <div class="subtitle">A.E.G.I.S. SPEECH RECOGNITION MODULE</div>
+          </div>
+        </div>
+        <div class="status-badge" id="statusBadge">
+          <span class="dot"></span>
+          <span id="statusText">STANDBY</span>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="controls">
+        <button class="ctrl-btn start" id="btnStart">
+          <span>🎤</span> Initialize
+        </button>
+        <button class="ctrl-btn stop" id="btnStop">
+          <span>⏹️</span> Terminate
+        </button>
+        <button class="ctrl-btn clear" id="btnClear">
+          <span>🗑️</span> Purge
+        </button>
+        <div class="font-controls">
+          <button class="font-btn" id="fontDown">−</button>
+          <span class="font-label" id="fontLabel">18px</span>
+          <button class="font-btn" id="fontUp">+</button>
+        </div>
+      </div>
+
+      <!-- Waveform -->
+      <div class="wave-decoration" id="waveform">
+        <span class="bar"></span><span class="bar"></span
+        ><span class="bar"></span> <span class="bar"></span
+        ><span class="bar"></span><span class="bar"></span>
+        <span class="bar"></span><span class="bar"></span
+        ><span class="bar"></span>
+      </div>
+
+      <!-- Transcript -->
+      <div class="transcript-area" id="transcript">
+        <span class="placeholder">> Awaiting audio input stream...</span>
+      </div>
+
+      <!-- Footer -->
+      <div class="hud-footer">
+        Powered by <span class="brand">A.E.G.I.S.</span>
+      </div>
+    </div>
+
+    <script>
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+      let recognition = null;
+      let isListening = false;
+      let fullTranscript = "";
+      let fontSize = 18;
+
+      const transcript = document.getElementById("transcript");
+      const statusBadge = document.getElementById("statusBadge");
+      const statusText = document.getElementById("statusText");
+      const waveform = document.getElementById("waveform");
+
+      function updateTranscript() {
+        if (fullTranscript.trim()) {
+          transcript.innerHTML =
+            '<span class="transcript-text">' +
+            fullTranscript.replace(/\n/g, "<br>") +
+            "</span>";
+          transcript.scrollTop = transcript.scrollHeight;
+        } else {
+          transcript.innerHTML =
+            '<span class="placeholder">> Awaiting audio input stream...</span>';
+        }
+      }
+
+      function setActive(active) {
+        isListening = active;
+        if (active) {
+          statusBadge.classList.add("active");
+          statusText.textContent = "LIVE";
+          waveform.classList.add("active");
+        } else {
+          statusBadge.classList.remove("active");
+          statusText.textContent = "STANDBY";
+          waveform.classList.remove("active");
+        }
+      }
+
+      function startRecognition() {
+        if (!SpeechRecognition) {
+          transcript.innerHTML =
+            '<span class="placeholder" style="color:#ff3333">ERROR: SpeechRecognition API unavailable in this browser.</span>';
+          return;
+        }
+
+        if (recognition) {
+          recognition.stop();
+          recognition = null;
+        }
+
+        recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = "en-US";
+
+        recognition.onstart = () => setActive(true);
+
+        recognition.onresult = (event) => {
+          let interim = "";
+          let final = "";
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+              final += event.results[i][0].transcript + " ";
+            } else {
+              interim += event.results[i][0].transcript;
+            }
+          }
+          if (final) fullTranscript += final;
+          const display =
+            fullTranscript +
+            (interim
+              ? '<span style="color:var(--text-muted)">' + interim + "</span>"
+              : "");
+          transcript.innerHTML =
+            '<span class="transcript-text">' + display + "</span>";
+          transcript.scrollTop = transcript.scrollHeight;
+        };
+
+        recognition.onerror = (event) => {
+          if (event.error !== "no-speech") {
+            console.error("Recognition error:", event.error);
+          }
+        };
+
+        recognition.onend = () => {
+          if (isListening) {
+            try {
+              recognition.start();
+            } catch (e) {
+              setActive(false);
+            }
+          } else {
+            setActive(false);
+          }
+        };
+
+        recognition.start();
+      }
+
+      document.getElementById("btnStart").addEventListener("click", () => {
+        if (!isListening) startRecognition();
+      });
+
+      document.getElementById("btnStop").addEventListener("click", () => {
+        isListening = false;
+        if (recognition) {
+          recognition.stop();
+          recognition = null;
+        }
+        setActive(false);
+      });
+
+      document.getElementById("btnClear").addEventListener("click", () => {
+        fullTranscript = "";
+        updateTranscript();
+      });
+
+      document.getElementById("fontUp").addEventListener("click", () => {
+        fontSize = Math.min(fontSize + 2, 40);
+        transcript.style.fontSize = fontSize + "px";
+        document.getElementById("fontLabel").textContent = fontSize + "px";
+      });
+
+      document.getElementById("fontDown").addEventListener("click", () => {
+        fontSize = Math.max(fontSize - 2, 10);
+        transcript.style.fontSize = fontSize + "px";
+        document.getElementById("fontLabel").textContent = fontSize + "px";
+      });
+    </script>
+  </body>
 </html>

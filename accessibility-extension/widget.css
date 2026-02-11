@@ -1,0 +1,15 @@
+/* ============================================
+   A.E.G.I.S. Widget — Injected into pages
+   Scoped to #aegis-widget-root via content script
+   ============================================ */
+
+/* === Host container — sits above page z-index === */
+#aegis-widget-root {
+  position: fixed !important;
+  bottom: 20px !important;
+  right: 20px !important;
+  z-index: 2147483647 !important;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif !important;
+  line-height: 1.5 !important;
+  color-scheme: dark !important;
+}

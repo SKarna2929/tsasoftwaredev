@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Captions - Accessibility Helper</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #f1f5f9;
+      min-height: 100vh;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    h1 {
+      font-size: 20px;
+      margin-bottom: 16px;
+      color: #93c5fd;
+    }
+    .status {
+      font-size: 14px;
+      margin-bottom: 12px;
+      color: #94a3b8;
+    }
+    .status.listening { color: #4ade80; }
+    .words-box {
+      width: 100%;
+      max-width: 600px;
+      min-height: 200px;
+      max-height: 400px;
+      padding: 20px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      font-size: 18px;
+      line-height: 1.6;
+      overflow-y: auto;
+      margin-bottom: 20px;
+    }
+    .words-box.placeholder { color: #64748b; font-style: italic; }
+    .buttons {
+      display: flex;
+      gap: 12px;
+    }
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .start-btn {
+      background: #2563eb;
+      color: white;
+    }
+    .start-btn:hover { background: #1d4ed8; }
+    .stop-btn {
+      background: #475569;
+      color: white;
+    }
+    .stop-btn:hover { background: #64748b; }
+    .error { color: #f87171; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Live Captions</h1>
+  <p id="status" class="status">Click Start, allow the microphone, then speak.</p>
+  <div id="words" class="words-box placeholder">Your words will appear here when you speak.</div>
+  <div class="buttons">
+    <button id="startBtn" class="start-btn">Start listening</button>
+    <button id="stopBtn" class="stop-btn">Stop</button>
+  </div>
+  <p id="error" class="error"></p>
+
+  <script>
+    var recognition = null;
+    var stream = null;
+    var fullText = "";
+    var isListening = false;
+
+    var wordsEl = document.getElementById("words");
+    var statusEl = document.getElementById("status");
+    var errorEl = document.getElementById("error");
+
+    function startListening() {
+      if (isListening) return;
+      errorEl.textContent = "";
+      wordsEl.textContent = "";
+      wordsEl.classList.remove("placeholder");
+      fullText = "";
+
+      if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
+        errorEl.textContent = "Speech recognition not supported. Use Chrome.";
+        return;
+      }
+
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(function (s) {
+          stream = s;
+          var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          recognition = new SpeechRecognition();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = "en-US";
+
+          recognition.onresult = function (e) {
+            var interim = "";
+            for (var i = e.resultIndex; i < e.results.length; i++) {
+              if (e.results[i].isFinal) {
+                fullText += e.results[i][0].transcript + " ";
+              } else {
+                interim += e.results[i][0].transcript;
+              }
+            }
+            wordsEl.textContent = fullText + interim;
+            wordsEl.scrollTop = wordsEl.scrollHeight;
+          };
+
+          recognition.onerror = function (e) {
+            if (e.error === "not-allowed") {
+              errorEl.textContent = "Microphone denied. Click the lock/info in the address bar and allow the microphone.";
+            }
+            stopListening();
+          };
+
+          recognition.onend = function () {
+            if (isListening && recognition) {
+              try { recognition.start(); } catch (err) {}
+            }
+          };
+
+          isListening = true;
+          statusEl.textContent = "Listening...";
+          statusEl.classList.add("listening");
+          recognition.start();
+        })
+        .catch(function () {
+          errorEl.textContent = "Microphone denied. Allow the microphone for this page and try again.";
+        });
+    }
+
+    document.getElementById("startBtn").onclick = startListening;
+
+    if (window.location.search.indexOf("start=1") !== -1) {
+      setTimeout(startListening, 300);
+    }
+
+    document.getElementById("stopBtn").onclick = function () {
+      stopListening();
+    };
+
+    function stopListening() {
+      isListening = false;
+      if (recognition) {
+        try { recognition.stop(); } catch (e) {}
+        recognition = null;
+      }
+      if (stream) {
+        try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+        stream = null;
+      }
+      statusEl.textContent = "Stopped.";
+      statusEl.classList.remove("listening");
+    }
+  </script>
+</body>
+</html>

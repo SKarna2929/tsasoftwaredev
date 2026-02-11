@@ -1,997 +1,699 @@
 // ============================================
-// POPUP.JS - Accessibility Helper Extension
-// Uses chrome.scripting.executeScript to modify websites
+// A.E.G.I.S. — Adaptive Experience & Guidance
+// Intelligence System — Core Runtime
 // ============================================
 
-var textSize = 100;
-var highContrastOn = false;
-var dyslexiaFontOn = false;
-var letterSpacing = 0;
-var lineHeight = 1.5;
-var readingGuideOn = false;
-var highlightLinksOn = false;
-var bigCursorOn = false;
-var currentFilter = "none";
-var speechRate = 1.0;
-var ttsLanguage = "en-US";
-var ttsVoiceName = "";
-var visualAlertsOn = false;
-var focusIndicatorOn = false;
+document.addEventListener("DOMContentLoaded", () => {
+  // === HUD CLOCK ===
+  function updateHUDClock() {
+    const el = document.getElementById("hudTime");
+    if (el) {
+      const now = new Date();
+      el.textContent = now.toTimeString().split(" ")[0];
+    }
+  }
+  updateHUDClock();
+  setInterval(updateHUDClock, 1000);
 
-// Wait for DOM
-document.addEventListener("DOMContentLoaded", function () {
-  chrome.storage.local.get(CAPTION_STORAGE_KEY, function (data) {
-    if (data[CAPTION_STORAGE_KEY]) showCaptionText(data[CAPTION_STORAGE_KEY]);
+  // === TAB NAVIGATION ===
+  const tabs = document.querySelectorAll(".nav-tab");
+  const panels = document.querySelectorAll(".tab-panel");
+
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const target = tab.dataset.tab;
+      tabs.forEach((t) => {
+        t.classList.remove("active");
+        t.setAttribute("aria-selected", "false");
+      });
+      panels.forEach((p) => p.classList.remove("active"));
+      tab.classList.add("active");
+      tab.setAttribute("aria-selected", "true");
+      const panel = document.getElementById(`panel-${target}`);
+      if (panel) panel.classList.add("active");
+    });
   });
-  // ========== DARK MODE TOGGLE ==========
-  var savedTheme = localStorage.getItem("theme");
-  if (savedTheme === "dark") {
-    document.body.classList.add("dark-mode");
+
+  // === STATE ===
+  let textSize = 100;
+  let letterSpacing = 0;
+  let lineHeight = 1.5;
+  let speechRate = 1.0;
+  let activeFilters = new Set();
+
+  const toggleStates = {
+    highContrast: false,
+    dyslexiaFont: false,
+    readingGuide: false,
+    highlightLinks: false,
+    bigCursor: false,
+    visualAlerts: false,
+    focusIndicator: false,
+  };
+
+  // === TOAST SYSTEM ===
+  let toastTimeout;
+  function showToast(message, icon = "⚡") {
+    const toast = document.getElementById("toast");
+    const msg = document.getElementById("toastMessage");
+    const ic = toast.querySelector(".toast-icon");
+    msg.textContent = message;
+    ic.textContent = icon;
+    toast.classList.add("show");
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => toast.classList.remove("show"), 2600);
   }
 
-  document.getElementById("themeToggle").addEventListener("click", function () {
-    document.body.classList.toggle("dark-mode");
-    var isDark = document.body.classList.contains("dark-mode");
-    localStorage.setItem("theme", isDark ? "dark" : "light");
+  // === ACTIVE COUNTER ===
+  function updateActiveCount() {
+    let count = 0;
+    Object.values(toggleStates).forEach((v) => {
+      if (v) count++;
+    });
+    if (textSize !== 100) count++;
+    if (letterSpacing !== 0) count++;
+    if (lineHeight !== 1.5) count++;
+    if (activeFilters.size > 0) count++;
+    document.getElementById("activeCount").textContent = count;
+  }
+
+  // === HELPER: EXECUTE IN TAB ===
+  function executeInTab(func, args = []) {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        chrome.scripting.executeScript({
+          target: { tabId: tabs[0].id },
+          func: func,
+          args: args,
+        });
+      }
+    });
+  }
+
+  // =======================================================
+  // INJECTION FUNCTIONS (run inside the target page)
+  // =======================================================
+
+  function injectTextSize(size) {
+    document.documentElement.style.fontSize = size + "%";
+  }
+
+  function injectLetterSpacing(px) {
+    document.querySelectorAll("*").forEach((el) => {
+      el.style.letterSpacing = px === 0 ? "" : px + "px";
+    });
+  }
+
+  function injectLineHeight(val) {
+    document
+      .querySelectorAll(
+        "p, li, span, div, td, th, a, label, h1, h2, h3, h4, h5, h6",
+      )
+      .forEach((el) => {
+        el.style.lineHeight = val;
+      });
+  }
+
+  function injectHighContrast(enable) {
+    if (enable) {
+      const s = document.createElement("style");
+      s.id = "a11y-high-contrast";
+      s.textContent = `
+        * { background-color: #000 !important; color: #fff !important; border-color: #fff !important; }
+        img, video, canvas, svg { filter: contrast(1.5) brightness(1.2) !important; }
+        a { color: #4dc3ff !important; text-decoration: underline !important; }
+      `;
+      document.head.appendChild(s);
+    } else {
+      const s = document.getElementById("a11y-high-contrast");
+      if (s) s.remove();
+    }
+  }
+
+  function injectDyslexiaFont(enable) {
+    const id = "a11y-dyslexia-font";
+    if (enable) {
+      if (!document.getElementById(id)) {
+        const link = document.createElement("link");
+        link.id = id + "-link";
+        link.rel = "stylesheet";
+        link.href =
+          "https://fonts.googleapis.com/css2?family=OpenDyslexic&display=swap";
+        document.head.appendChild(link);
+        const s = document.createElement("style");
+        s.id = id;
+        s.textContent = `* { font-family: 'OpenDyslexic', sans-serif !important; }`;
+        document.head.appendChild(s);
+      }
+    } else {
+      const s = document.getElementById(id);
+      if (s) s.remove();
+      const l = document.getElementById(id + "-link");
+      if (l) l.remove();
+    }
+  }
+
+  function injectReadingGuide(enable) {
+    const id = "a11y-reading-guide";
+    if (enable) {
+      if (!document.getElementById(id)) {
+        const guide = document.createElement("div");
+        guide.id = id;
+        guide.style.cssText = `position:fixed;left:0;right:0;height:40px;pointer-events:none;
+          border-top:2px solid rgba(0,180,255,0.5);border-bottom:2px solid rgba(0,180,255,0.5);
+          background:rgba(0,180,255,0.06);z-index:99999;transition:top 0.05s ease;`;
+        document.body.appendChild(guide);
+        document.addEventListener("mousemove", function a11yGuideMove(e) {
+          const g = document.getElementById(id);
+          if (g) g.style.top = e.clientY - 20 + "px";
+        });
+      }
+    } else {
+      const g = document.getElementById(id);
+      if (g) g.remove();
+    }
+  }
+
+  function injectHighlightLinks(enable) {
+    const id = "a11y-highlight-links";
+    if (enable) {
+      if (!document.getElementById(id)) {
+        const s = document.createElement("style");
+        s.id = id;
+        s.textContent = `
+          a { outline: 2px solid #00b4ff !important; outline-offset: 2px !important;
+              background-color: rgba(0,180,255,0.08) !important;
+              text-decoration: underline !important; }
+          a:hover { background-color: rgba(0,180,255,0.15) !important; }
+        `;
+        document.head.appendChild(s);
+      }
+    } else {
+      const s = document.getElementById(id);
+      if (s) s.remove();
+    }
+  }
+
+  function injectBigCursor(enable) {
+    const id = "a11y-big-cursor";
+    if (enable) {
+      if (!document.getElementById(id)) {
+        const s = document.createElement("style");
+        s.id = id;
+        s.textContent = `* { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M4 4l16 40 6-16 16-6z' fill='%2300b4ff' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E") 4 4, auto !important; }`;
+        document.head.appendChild(s);
+      }
+    } else {
+      const s = document.getElementById(id);
+      if (s) s.remove();
+    }
+  }
+
+  function injectColorFilter(filterType) {
+    const id = "a11y-color-filter";
+    let existing = document.getElementById(id);
+    if (existing) existing.remove();
+    let existingSvg = document.getElementById("a11y-svg-filters");
+    if (existingSvg) existingSvg.remove();
+
+    if (filterType === "none") return;
+
+    const matrices = {
+      protanopia:
+        "0.567,0.433,0,0,0 0.558,0.442,0,0,0 0,0.242,0.758,0,0 0,0,0,1,0",
+      deuteranopia: "0.625,0.375,0,0,0 0.7,0.3,0,0,0 0,0.3,0.7,0,0 0,0,0,1,0",
+      tritanopia:
+        "0.95,0.05,0,0,0 0,0.433,0.567,0,0 0,0.475,0.525,0,0 0,0,0,1,0",
+    };
+
+    if (!matrices[filterType]) return;
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.id = "a11y-svg-filters";
+    svg.setAttribute("style", "position:absolute;width:0;height:0");
+    svg.innerHTML = `<defs><filter id="a11y-cf"><feColorMatrix type="matrix" values="${matrices[filterType]}"/></filter></defs>`;
+    document.body.appendChild(svg);
+
+    const s = document.createElement("style");
+    s.id = id;
+    s.textContent = `html { filter: url(#a11y-cf) !important; }`;
+    document.head.appendChild(s);
+  }
+
+  function injectVisualAlerts(enable) {
+    const id = "a11y-visual-alerts";
+    if (enable) {
+      if (!document.getElementById(id)) {
+        const s = document.createElement("style");
+        s.id = id;
+        s.textContent = `
+          @keyframes a11yFlash { 0%,100% { box-shadow: inset 0 0 0 0 transparent; } 50% { box-shadow: inset 0 0 60px rgba(0,180,255,0.3); } }
+          :focus { animation: a11yFlash 0.5s ease; }
+          button:active, a:active { animation: a11yFlash 0.3s ease; }
+        `;
+        document.head.appendChild(s);
+      }
+    } else {
+      const s = document.getElementById(id);
+      if (s) s.remove();
+    }
+  }
+
+  function injectFocusIndicator(enable) {
+    const id = "a11y-focus-indicator";
+    if (enable) {
+      if (!document.getElementById(id)) {
+        const s = document.createElement("style");
+        s.id = id;
+        s.textContent = `
+          *:focus { outline: 3px solid #00b4ff !important; outline-offset: 3px !important;
+                    box-shadow: 0 0 12px rgba(0,180,255,0.4) !important; }
+          *:focus:not(:focus-visible) { outline: none !important; box-shadow: none !important; }
+          *:focus-visible { outline: 3px solid #00b4ff !important; outline-offset: 3px !important;
+                            box-shadow: 0 0 12px rgba(0,180,255,0.4) !important; }
+        `;
+        document.head.appendChild(s);
+      }
+    } else {
+      const s = document.getElementById(id);
+      if (s) s.remove();
+    }
+  }
+
+  // =======================================================
+  // EVENT HANDLERS
+  // =======================================================
+
+  // Text Size
+  document.getElementById("increaseText").addEventListener("click", () => {
+    textSize = Math.min(textSize + 10, 200);
+    document.getElementById("textSizeValue").textContent = textSize + "%";
+    executeInTab(injectTextSize, [textSize]);
+    showToast(`Font matrix: ${textSize}%`, "🔤");
+    updateActiveCount();
   });
 
-  // ========== TEXT SIZE BUTTONS ==========
-  document
-    .getElementById("decreaseText")
-    .addEventListener("click", function () {
-      textSize = Math.max(50, textSize - 10);
-      document.getElementById("textSizeDisplay").textContent = textSize + "%";
-      injectTextSize(textSize);
-    });
+  document.getElementById("decreaseText").addEventListener("click", () => {
+    textSize = Math.max(textSize - 10, 50);
+    document.getElementById("textSizeValue").textContent = textSize + "%";
+    executeInTab(injectTextSize, [textSize]);
+    showToast(`Font matrix: ${textSize}%`, "🔤");
+    updateActiveCount();
+  });
 
-  document
-    .getElementById("increaseText")
-    .addEventListener("click", function () {
-      textSize = Math.min(200, textSize + 10);
-      document.getElementById("textSizeDisplay").textContent = textSize + "%";
-      injectTextSize(textSize);
-    });
+  // Letter Spacing
+  document.getElementById("increaseSpacing").addEventListener("click", () => {
+    letterSpacing = Math.min(letterSpacing + 1, 10);
+    document.getElementById("spacingValue").textContent = letterSpacing + "px";
+    executeInTab(injectLetterSpacing, [letterSpacing]);
+    showToast(`Spacing vector: ${letterSpacing}px`, "↔️");
+    updateActiveCount();
+  });
 
-  // ========== HIGH CONTRAST BUTTON ==========
-  document
-    .getElementById("toggleContrast")
-    .addEventListener("click", function () {
-      highContrastOn = !highContrastOn;
-      this.classList.toggle("active", highContrastOn);
-      injectHighContrast(highContrastOn);
-    });
+  document.getElementById("decreaseSpacing").addEventListener("click", () => {
+    letterSpacing = Math.max(letterSpacing - 1, 0);
+    document.getElementById("spacingValue").textContent = letterSpacing + "px";
+    executeInTab(injectLetterSpacing, [letterSpacing]);
+    showToast(`Spacing vector: ${letterSpacing}px`, "↔️");
+    updateActiveCount();
+  });
 
-  // ========== DYSLEXIA FONT TOGGLE ==========
-  document
-    .getElementById("toggleDyslexia")
-    .addEventListener("click", function () {
-      dyslexiaFontOn = !dyslexiaFontOn;
-      this.classList.toggle("active", dyslexiaFontOn);
-      injectDyslexiaFont(dyslexiaFontOn);
-    });
-
-  // ========== LETTER SPACING ==========
-  document
-    .getElementById("decreaseSpacing")
-    .addEventListener("click", function () {
-      letterSpacing = Math.max(0, letterSpacing - 1);
-      document.getElementById("spacingDisplay").textContent =
-        letterSpacing + "px";
-      injectLetterSpacing(letterSpacing);
-    });
-
-  document
-    .getElementById("increaseSpacing")
-    .addEventListener("click", function () {
-      letterSpacing = Math.min(10, letterSpacing + 1);
-      document.getElementById("spacingDisplay").textContent =
-        letterSpacing + "px";
-      injectLetterSpacing(letterSpacing);
-    });
-
-  // ========== LINE HEIGHT ==========
-  document
-    .getElementById("decreaseLineHeight")
-    .addEventListener("click", function () {
-      lineHeight = Math.max(1, lineHeight - 0.25);
-      document.getElementById("lineHeightDisplay").textContent =
-        lineHeight.toFixed(2);
-      injectLineHeight(lineHeight);
-    });
-
+  // Line Height
   document
     .getElementById("increaseLineHeight")
-    .addEventListener("click", function () {
-      lineHeight = Math.min(3, lineHeight + 0.25);
-      document.getElementById("lineHeightDisplay").textContent =
+    .addEventListener("click", () => {
+      lineHeight = Math.min(lineHeight + 0.25, 3.0);
+      document.getElementById("lineHeightValue").textContent =
         lineHeight.toFixed(2);
-      injectLineHeight(lineHeight);
+      executeInTab(injectLineHeight, [lineHeight]);
+      showToast(`Line spacing: ${lineHeight.toFixed(2)}`, "📐");
+      updateActiveCount();
     });
 
-  // ========== READING GUIDE TOGGLE ==========
   document
-    .getElementById("toggleReadingGuide")
-    .addEventListener("click", function () {
-      readingGuideOn = !readingGuideOn;
-      this.classList.toggle("active", readingGuideOn);
-      injectReadingGuide(readingGuideOn);
+    .getElementById("decreaseLineHeight")
+    .addEventListener("click", () => {
+      lineHeight = Math.max(lineHeight - 0.25, 1.0);
+      document.getElementById("lineHeightValue").textContent =
+        lineHeight.toFixed(2);
+      executeInTab(injectLineHeight, [lineHeight]);
+      showToast(`Line spacing: ${lineHeight.toFixed(2)}`, "📐");
+      updateActiveCount();
     });
 
-  // ========== HIGHLIGHT LINKS TOGGLE ==========
-  document
-    .getElementById("toggleHighlightLinks")
-    .addEventListener("click", function () {
-      highlightLinksOn = !highlightLinksOn;
-      this.classList.toggle("active", highlightLinksOn);
-      injectHighlightLinks(highlightLinksOn);
+  // Toggle controls
+  function setupToggle(id, injectFn, onMsg, offMsg, icon) {
+    const btn = document.getElementById(id);
+    btn.addEventListener("click", () => {
+      toggleStates[id] = !toggleStates[id];
+      btn.classList.toggle("active", toggleStates[id]);
+      executeInTab(injectFn, [toggleStates[id]]);
+      showToast(toggleStates[id] ? onMsg : offMsg, icon);
+      updateActiveCount();
     });
+  }
 
-  // ========== BIG CURSOR TOGGLE ==========
-  document
-    .getElementById("toggleBigCursor")
-    .addEventListener("click", function () {
-      bigCursorOn = !bigCursorOn;
-      this.classList.toggle("active", bigCursorOn);
-      injectBigCursor(bigCursorOn);
-    });
+  setupToggle(
+    "highContrast",
+    injectHighContrast,
+    "High contrast: ENGAGED",
+    "High contrast: DISENGAGED",
+    "🌗",
+  );
+  setupToggle(
+    "dyslexiaFont",
+    injectDyslexiaFont,
+    "Dyslexia font: LOADED",
+    "Dyslexia font: REMOVED",
+    "🅰️",
+  );
+  setupToggle(
+    "readingGuide",
+    injectReadingGuide,
+    "Reading guide: TRACKING",
+    "Reading guide: OFFLINE",
+    "📖",
+  );
+  setupToggle(
+    "highlightLinks",
+    injectHighlightLinks,
+    "Link scanner: ACTIVE",
+    "Link scanner: OFFLINE",
+    "🔗",
+  );
+  setupToggle(
+    "bigCursor",
+    injectBigCursor,
+    "Cursor enhancer: DEPLOYED",
+    "Cursor enhancer: RETRACTED",
+    "🖱️",
+  );
+  setupToggle(
+    "visualAlerts",
+    injectVisualAlerts,
+    "Visual alerts: ARMED",
+    "Visual alerts: DISARMED",
+    "💡",
+  );
+  setupToggle(
+    "focusIndicator",
+    injectFocusIndicator,
+    "Focus beacon: LOCKED",
+    "Focus beacon: UNLOCKED",
+    "🎯",
+  );
 
-  // ========== COLOR BLINDNESS FILTERS ==========
-  document.querySelectorAll(".filter-btn").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      document.querySelectorAll(".filter-btn").forEach(function (b) {
-        b.classList.remove("active");
-      });
-      this.classList.add("active");
-      currentFilter = this.id.replace("filter", "").toLowerCase();
-      injectColorFilter(currentFilter);
+  // Color Filters
+  document.querySelectorAll(".filter-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const filter = btn.dataset.filter;
+      document
+        .querySelectorAll(".filter-btn")
+        .forEach((b) => b.classList.remove("active"));
+
+      if (filter === "none") {
+        activeFilters.clear();
+        executeInTab(injectColorFilter, ["none"]);
+        showToast("Color filters: CLEARED", "🌈");
+      } else {
+        btn.classList.add("active");
+        activeFilters.clear();
+        activeFilters.add(filter);
+        executeInTab(injectColorFilter, [filter]);
+        const names = {
+          protanopia: "Protanopia correction",
+          deuteranopia: "Deuteranopia correction",
+          tritanopia: "Tritanopia correction",
+        };
+        showToast(`${names[filter]}: ONLINE`, "🎨");
+      }
+      updateActiveCount();
     });
   });
 
-  // ========== SPEECH RATE ==========
-  document
-    .getElementById("decreaseRate")
-    .addEventListener("click", function () {
-      speechRate = Math.max(0.5, speechRate - 0.1);
-      document.getElementById("rateDisplay").textContent =
-        speechRate.toFixed(1) + "x";
-    });
+  // =======================================================
+  // TEXT-TO-SPEECH
+  // =======================================================
+  const langMap = {
+    en: "en-US",
+    es: "es-ES",
+    fr: "fr-FR",
+    de: "de-DE",
+    it: "it-IT",
+    pt: "pt-BR",
+    ru: "ru-RU",
+    ja: "ja-JP",
+    ko: "ko-KR",
+    zh: "zh-CN",
+    ar: "ar-SA",
+    hi: "hi-IN",
+    bn: "bn-BD",
+    nl: "nl-NL",
+    pl: "pl-PL",
+    sv: "sv-SE",
+    tr: "tr-TR",
+    vi: "vi-VN",
+    th: "th-TH",
+    uk: "uk-UA",
+    el: "el-GR",
+    he: "he-IL",
+  };
 
-  document
-    .getElementById("increaseRate")
-    .addEventListener("click", function () {
-      speechRate = Math.min(2.0, speechRate + 0.1);
-      document.getElementById("rateDisplay").textContent =
-        speechRate.toFixed(1) + "x";
-    });
-
-  // ========== VISUAL ALERTS TOGGLE ==========
-  document
-    .getElementById("toggleVisualAlerts")
-    .addEventListener("click", function () {
-      visualAlertsOn = !visualAlertsOn;
-      this.classList.toggle("active", visualAlertsOn);
-      injectVisualAlerts(visualAlertsOn);
-    });
-
-  // ========== FOCUS INDICATOR TOGGLE ==========
-  document
-    .getElementById("toggleFocusIndicator")
-    .addEventListener("click", function () {
-      focusIndicatorOn = !focusIndicatorOn;
-      this.classList.toggle("active", focusIndicatorOn);
-      injectFocusIndicator(focusIndicatorOn);
-    });
-
-  // ========== RESET BUTTON ==========
-  document.getElementById("resetBtn").addEventListener("click", function () {
-    // Reset all variables
-    textSize = 100;
-    highContrastOn = false;
-    dyslexiaFontOn = false;
-    letterSpacing = 0;
-    lineHeight = 1.5;
-    readingGuideOn = false;
-    highlightLinksOn = false;
-    bigCursorOn = false;
-    currentFilter = "none";
-    speechRate = 1.0;
-    ttsLanguage = "en-US";
-    ttsVoiceName = "";
-    visualAlertsOn = false;
-    focusIndicatorOn = false;
-
-    // Reset displays
-    document.getElementById("textSizeDisplay").textContent = "100%";
-    document.getElementById("spacingDisplay").textContent = "0px";
-    document.getElementById("lineHeightDisplay").textContent = "1.50";
-    document.getElementById("rateDisplay").textContent = "1.0x";
-    var langSelect = document.getElementById("ttsLanguage");
-    if (langSelect) {
-      langSelect.value = "en-US";
-      localStorage.setItem("ttsLanguage", "en-US");
+  async function translateText(text, targetLang) {
+    if (targetLang === "en") return text;
+    try {
+      const res = await fetch(
+        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${targetLang}`,
+      );
+      const data = await res.json();
+      if (data.responseData && data.responseData.translatedText) {
+        return data.responseData.translatedText;
+      }
+    } catch (e) {
+      console.warn("Translation error:", e);
     }
-    var voiceSelect = document.getElementById("ttsVoice");
-    if (voiceSelect) {
-      voiceSelect.value = "";
-      localStorage.setItem("ttsVoice", "");
-    }
-
-    // Reset all toggle buttons
-    document.querySelectorAll(".toggle-btn").forEach(function (btn) {
-      btn.classList.remove("active");
-    });
-
-    // Reset filter buttons
-    document.querySelectorAll(".filter-btn").forEach(function (btn) {
-      btn.classList.remove("active");
-    });
-    document.getElementById("filterNone").classList.add("active");
-
-    injectReset();
-  });
-
-  // ========== TEXT-TO-SPEECH ==========
-  var ttsLangSelect = document.getElementById("ttsLanguage");
-  if (ttsLangSelect) {
-    var savedLang = localStorage.getItem("ttsLanguage");
-    if (savedLang) {
-      ttsLangSelect.value = savedLang;
-      ttsLanguage = savedLang;
-    }
-    ttsLangSelect.addEventListener("change", function () {
-      ttsLanguage = this.value;
-      localStorage.setItem("ttsLanguage", ttsLanguage);
-    });
+    return text;
   }
 
-  function populateVoiceList() {
-    var voices = window.speechSynthesis.getVoices();
-    var sel = document.getElementById("ttsVoice");
-    if (!sel) return;
-    var saved = localStorage.getItem("ttsVoice") || "";
-    sel.innerHTML = '<option value="">Default voice</option>';
-    for (var i = 0; i < voices.length; i++) {
-      var v = voices[i];
-      var label = v.name + (v.lang ? " (" + v.lang + ")" : "");
-      var value = v.name + "|" + (v.lang || "");
-      var opt = document.createElement("option");
-      opt.value = value;
-      opt.textContent = label;
-      sel.appendChild(opt);
-    }
-    if (saved && sel.querySelector('option[value="' + saved + '"]')) {
-      sel.value = saved;
-      ttsVoiceName = saved;
-    }
-  }
-  populateVoiceList();
-  if (window.speechSynthesis.onvoiceschanged !== undefined) {
-    window.speechSynthesis.onvoiceschanged = populateVoiceList;
-  }
-  var ttsVoiceSelect = document.getElementById("ttsVoice");
-  if (ttsVoiceSelect) {
-    ttsVoiceSelect.addEventListener("change", function () {
-      ttsVoiceName = this.value;
-      localStorage.setItem("ttsVoice", ttsVoiceName);
-    });
+  function findVoice(langCode) {
+    const voices = speechSynthesis.getVoices();
+    let voice = voices.find((v) => v.lang === langCode);
+    if (!voice)
+      voice = voices.find((v) => v.lang.startsWith(langCode.split("-")[0]));
+    return voice || null;
   }
 
-  function getSelectedVoice() {
-    var name = (document.getElementById("ttsVoice") && document.getElementById("ttsVoice").value) || ttsVoiceName;
-    if (!name) return null;
-    var voices = window.speechSynthesis.getVoices();
-    var parts = name.split("|");
-    var wantName = parts[0];
-    var wantLang = parts[1] || "";
-    for (var i = 0; i < voices.length; i++) {
-      if (voices[i].name === wantName && (!wantLang || voices[i].lang === wantLang)) return voices[i];
-    }
-    for (var j = 0; j < voices.length; j++) {
-      if (voices[j].name === wantName) return voices[j];
-    }
-    return null;
-  }
-
-  function getLangCode(langValue) {
-    if (!langValue) return "en";
-    var part = langValue.split("-")[0];
-    return part || "en";
-  }
-
-  function getVoiceForLang(lang) {
-    var voices = window.speechSynthesis.getVoices();
-    var code = getLangCode(lang);
-    for (var i = 0; i < voices.length; i++) {
-      var v = voices[i];
-      if (v.lang && (v.lang === lang || v.lang.indexOf(code) === 0)) return v;
-    }
-    return null;
-  }
-
-  function translateThenSpeak(text, lang, doSpeak) {
-    var langCode = getLangCode(lang);
-    if (langCode === "en") {
-      doSpeak(text);
+  document.getElementById("playTTS").addEventListener("click", async () => {
+    const text = document.getElementById("ttsText").value.trim();
+    if (!text) {
+      showToast("Input stream empty — enter text", "⚠️");
       return;
     }
-    var url =
-      "https://api.mymemory.translated.net/get?q=" +
-      encodeURIComponent(text) +
-      "&langpair=en|" +
-      langCode;
-    fetch(url)
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        var translated =
-          data &&
-          data.responseData &&
-          data.responseData.translatedText;
-        if (translated && data.responseStatus !== 403) {
-          doSpeak(translated, lang);
-        } else {
-          doSpeak(text, lang);
+
+    speechSynthesis.cancel();
+    const lang = document.getElementById("ttsLanguage").value;
+    showToast("Translating & synthesizing...", "📡");
+
+    const translated = await translateText(text, lang);
+    const utter = new SpeechSynthesisUtterance(translated);
+    utter.rate = speechRate;
+    utter.lang = langMap[lang] || "en-US";
+
+    const voice = findVoice(utter.lang);
+    if (voice) utter.voice = voice;
+
+    utter.onstart = () => showToast("Voice synth: TRANSMITTING", "🔊");
+    utter.onend = () => showToast("Transmission complete", "✅");
+    utter.onerror = () => showToast("Synth error detected", "❌");
+
+    speechSynthesis.speak(utter);
+  });
+
+  document.getElementById("stopTTS").addEventListener("click", () => {
+    speechSynthesis.cancel();
+    showToast("Voice synth: TERMINATED", "⏹️");
+  });
+
+  // Speech Rate
+  document.getElementById("increaseRate").addEventListener("click", () => {
+    speechRate = Math.min(speechRate + 0.25, 3.0);
+    document.getElementById("rateValue").textContent =
+      speechRate.toFixed(1) + "x";
+    showToast(`Synth rate: ${speechRate.toFixed(1)}x`, "⚡");
+  });
+
+  document.getElementById("decreaseRate").addEventListener("click", () => {
+    speechRate = Math.max(speechRate - 0.25, 0.25);
+    document.getElementById("rateValue").textContent =
+      speechRate.toFixed(1) + "x";
+    showToast(`Synth rate: ${speechRate.toFixed(1)}x`, "⚡");
+  });
+
+  // Pre-load voices
+  if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+  }
+
+  // =======================================================
+  // LIVE CAPTIONS
+  // =======================================================
+  let captionInterval = null;
+  let captionActive = false;
+
+  function startCaptionPolling() {
+    captionInterval = setInterval(() => {
+      chrome.storage.local.get("a11yLiveCaptionText", (data) => {
+        if (data.a11yLiveCaptionText) {
+          const display = document.getElementById("captionDisplay");
+          display.innerHTML = "";
+          const span = document.createElement("span");
+          span.textContent = data.a11yLiveCaptionText;
+          span.style.color = "var(--text-primary)";
+          display.appendChild(span);
+          display.scrollTop = display.scrollHeight;
         }
-      })
-      .catch(function () {
-        doSpeak(text, lang);
       });
+    }, 500);
   }
 
-  function doSpeak(text, lang) {
-    window.speechSynthesis.cancel();
-    var utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang;
-    utterance.rate = speechRate;
-    var voice = getVoiceForLang(lang);
-    if (!voice) voice = getSelectedVoice();
-    if (voice) utterance.voice = voice;
-    window.speechSynthesis.speak(utterance);
-  }
+  document.getElementById("startCaptions").addEventListener("click", () => {
+    if (captionActive) return;
+    captionActive = true;
+    const micBtn = document.getElementById("startCaptions");
+    micBtn.classList.add("active");
 
-  document.getElementById("speakBtn").addEventListener("click", function () {
-    var text = document.getElementById("textInput").value.trim();
-    if (text === "") {
-      alert("Please type some text to read aloud.");
-      return;
-    }
-    var langSelect = document.getElementById("ttsLanguage");
-    var lang = (langSelect && langSelect.value) || ttsLanguage || "en-US";
-    translateThenSpeak(text, lang, function (textToSpeak) {
-      doSpeak(textToSpeak, lang);
+    const status = document.getElementById("captionStatus");
+    status.classList.add("listening");
+    status.querySelector(".status-text").textContent =
+      "LIVE — Transcription Active";
+
+    document.getElementById("captionDisplay").innerHTML =
+      '<span class="placeholder-text">> Listening for audio input...</span>';
+
+    chrome.storage.local.set({ a11yLiveCaptionText: "" });
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        chrome.scripting.executeScript({
+          target: { tabId: tabs[0].id },
+          files: ["content-captions.js"],
+        });
+      }
     });
+
+    startCaptionPolling();
+    showToast("Live transcribe: ONLINE", "🎙️");
   });
 
-  document
-    .getElementById("stopSpeakBtn")
-    .addEventListener("click", function () {
-      window.speechSynthesis.cancel();
-    });
+  document.getElementById("stopCaptions").addEventListener("click", () => {
+    captionActive = false;
+    clearInterval(captionInterval);
 
-  // ========== READ SELECTED TEXT ==========
-  document
-    .getElementById("speakPageBtn")
-    .addEventListener("click", function () {
-      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        chrome.scripting.executeScript(
-          {
-            target: { tabId: tabs[0].id },
-            func: function () {
-              return window.getSelection().toString();
-            },
-          },
-          function (results) {
-            if (results && results[0] && results[0].result) {
-              var text = results[0].result.trim();
-              if (text) {
-                var langSelect = document.getElementById("ttsLanguage");
-                var lang = (langSelect && langSelect.value) || ttsLanguage || "en-US";
-                translateThenSpeak(text, lang, function (textToSpeak) {
-                  doSpeak(textToSpeak, lang);
-                });
-              } else {
-                alert("Please select some text on the page first.");
-              }
+    document.getElementById("startCaptions").classList.remove("active");
+    const status = document.getElementById("captionStatus");
+    status.classList.remove("listening");
+    status.querySelector(".status-text").textContent =
+      "STANDBY — Awaiting Activation";
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        chrome.scripting.executeScript({
+          target: { tabId: tabs[0].id },
+          func: () => {
+            if (window._a11yCaptionRecognition) {
+              window._a11yCaptionRecognition.stop();
+              window._a11yCaptionRecognition = null;
             }
           },
-        );
-      });
+        });
+      }
     });
 
-  // ========== LIVE CAPTIONS ==========
-  document
-    .getElementById("startCaptionsBtn")
-    .addEventListener("click", startCaptions);
-  document
-    .getElementById("stopCaptionsBtn")
-    .addEventListener("click", stopCaptions);
-  document
-    .getElementById("clearCaptionsBtn")
-    .addEventListener("click", clearCaptions);
-  document.getElementById("openCaptionsTab").addEventListener("click", function (e) {
+    showToast("Live transcribe: OFFLINE", "⏹️");
+  });
+
+  document.getElementById("clearCaptions").addEventListener("click", () => {
+    document.getElementById("captionDisplay").innerHTML =
+      '<span class="placeholder-text">> Transcript will render here...</span>';
+    chrome.storage.local.set({ a11yLiveCaptionText: "" });
+    showToast("Transcript buffer: CLEARED", "🗑️");
+  });
+
+  // Open captions tab
+  document.getElementById("openCaptionsTab").addEventListener("click", (e) => {
     e.preventDefault();
     chrome.tabs.create({ url: chrome.runtime.getURL("captions.html") });
   });
+
+  // =======================================================
+  // RESET ALL
+  // =======================================================
+  document.getElementById("resetAll").addEventListener("click", () => {
+    // Reset state
+    textSize = 100;
+    letterSpacing = 0;
+    lineHeight = 1.5;
+    speechRate = 1.0;
+    activeFilters.clear();
+
+    Object.keys(toggleStates).forEach((key) => {
+      toggleStates[key] = false;
+    });
+
+    // Reset UI
+    document.getElementById("textSizeValue").textContent = "100%";
+    document.getElementById("spacingValue").textContent = "0px";
+    document.getElementById("lineHeightValue").textContent = "1.5";
+    document.getElementById("rateValue").textContent = "1.0x";
+    document
+      .querySelectorAll(".toggle-btn")
+      .forEach((btn) => btn.classList.remove("active"));
+    document
+      .querySelectorAll(".filter-btn")
+      .forEach((btn) => btn.classList.remove("active"));
+
+    // Clear captions
+    captionActive = false;
+    clearInterval(captionInterval);
+    document.getElementById("startCaptions").classList.remove("active");
+    const capStatus = document.getElementById("captionStatus");
+    capStatus.classList.remove("listening");
+    capStatus.querySelector(".status-text").textContent =
+      "STANDBY — Awaiting Activation";
+    document.getElementById("captionDisplay").innerHTML =
+      '<span class="placeholder-text">> Transcript will render here...</span>';
+
+    // Stop TTS
+    speechSynthesis.cancel();
+
+    // Remove all injected
+    executeInTab(() => {
+      document.documentElement.style.fontSize = "";
+      document.querySelectorAll("*").forEach((el) => {
+        el.style.letterSpacing = "";
+        el.style.lineHeight = "";
+      });
+      [
+        "a11y-high-contrast",
+        "a11y-dyslexia-font",
+        "a11y-dyslexia-font-link",
+        "a11y-reading-guide",
+        "a11y-highlight-links",
+        "a11y-big-cursor",
+        "a11y-color-filter",
+        "a11y-svg-filters",
+        "a11y-visual-alerts",
+        "a11y-focus-indicator",
+      ].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+      });
+    });
+
+    updateActiveCount();
+    showToast("SYSTEM RESET — All modules offline", "⟲");
+  });
+
+  // Initialize
+  updateActiveCount();
 });
-
-// ============================================
-// INJECT TEXT SIZE INTO WEBSITE
-// ============================================
-function injectTextSize(size) {
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    if (!tabs[0]) return;
-
-    chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      func: function (sizePercent) {
-        var el = document.getElementById("a11y-helper-textsize");
-        if (!el) {
-          el = document.createElement("style");
-          el.id = "a11y-helper-textsize";
-          document.head.appendChild(el);
-        }
-
-        // Use a smarter approach: only scale text elements, not containers
-        // This preserves layout while making text more readable
-        var scale = sizePercent / 100;
-
-        if (sizePercent === 100) {
-          el.textContent = "";
-          return;
-        }
-
-        el.textContent =
-          // Scale text elements only - not their containers
-          "p, span:not(.icon):not([class*='icon']), " +
-          "a, li, td, th, label, " +
-          "h1, h2, h3, h4, h5, h6, " +
-          "blockquote, figcaption, caption, " +
-          "button, input, textarea, select, " +
-          ".text, [class*='text'], [class*='title'], [class*='desc'], " +
-          "article, section p, main p { " +
-          "  font-size: calc(1em * " +
-          scale +
-          ") !important; " +
-          "  line-height: 1.5 !important; " +
-          "}" +
-          // Ensure minimum tap targets for accessibility
-          "a, button, [role='button'] { " +
-          "  min-height: 44px; " +
-          "  min-width: 44px; " +
-          "}";
-      },
-      args: [size],
-    });
-  });
-}
-
-// ============================================
-// INJECT HIGH CONTRAST INTO WEBSITE
-// ============================================
-function injectHighContrast(enabled) {
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    if (!tabs[0]) return;
-
-    chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      func: function (on) {
-        var el = document.getElementById("a11y-helper-contrast");
-        if (on) {
-          if (!el) {
-            el = document.createElement("style");
-            el.id = "a11y-helper-contrast";
-            document.head.appendChild(el);
-          }
-
-          el.textContent =
-            // Everything: black bg, white text
-            "* { background: #000 !important; color: #fff !important; border-color: #fff !important; box-shadow: none !important; text-shadow: none !important; }" +
-            // Links: yellow
-            "a { color: #ff0 !important; }" +
-            "a:hover, a:focus { color: #0ff !important; }" +
-            // Buttons: yellow outline
-            "button, [role='button'], input[type='submit'], input[type='button'] { color: #ff0 !important; border: 2px solid #ff0 !important; }" +
-            // Inputs: white border
-            "input, textarea, select { border: 2px solid #fff !important; }" +
-            // Focus: cyan outline
-            "*:focus { outline: 2px solid #0ff !important; }" +
-            // Images: visible
-            "img, video, svg { border: 2px solid #ff0 !important; background: transparent !important; }";
-        } else {
-          if (el) el.remove();
-        }
-      },
-      args: [enabled],
-    });
-  });
-}
-
-// ============================================
-// RESET WEBSITE
-// ============================================
-function injectReset() {
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    if (!tabs[0]) return;
-
-    chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      func: function () {
-        // Remove all accessibility helper styles
-        var ids = [
-          "a11y-helper-textsize",
-          "a11y-helper-contrast",
-          "a11y-helper-dyslexia",
-          "a11y-helper-spacing",
-          "a11y-helper-lineheight",
-          "a11y-helper-readingguide",
-          "a11y-helper-highlightlinks",
-          "a11y-helper-bigcursor",
-          "a11y-helper-colorfilter",
-          "a11y-helper-visualalerts",
-          "a11y-helper-focusindicator",
-        ];
-        ids.forEach(function (id) {
-          var el = document.getElementById(id);
-          if (el) el.remove();
-        });
-        // Remove reading guide element
-        var guide = document.getElementById("a11y-reading-guide");
-        if (guide) guide.remove();
-      },
-    });
-  });
-}
-
-// ============================================
-// DYSLEXIA-FRIENDLY FONT
-// ============================================
-function injectDyslexiaFont(enabled) {
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    if (!tabs[0]) return;
-
-    chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      func: function (on) {
-        var el = document.getElementById("a11y-helper-dyslexia");
-        if (on) {
-          if (!el) {
-            el = document.createElement("style");
-            el.id = "a11y-helper-dyslexia";
-            document.head.appendChild(el);
-          }
-          // Use OpenDyslexic or fallback to Comic Sans (commonly recommended for dyslexia)
-          el.textContent =
-            "@import url('https://fonts.cdnfonts.com/css/opendyslexic');" +
-            "* { font-family: 'OpenDyslexic', 'Comic Sans MS', 'Arial', sans-serif !important; }";
-        } else {
-          if (el) el.remove();
-        }
-      },
-      args: [enabled],
-    });
-  });
-}
-
-// ============================================
-// LETTER SPACING
-// ============================================
-function injectLetterSpacing(spacing) {
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    if (!tabs[0]) return;
-
-    chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      func: function (sp) {
-        var el = document.getElementById("a11y-helper-spacing");
-        if (sp > 0) {
-          if (!el) {
-            el = document.createElement("style");
-            el.id = "a11y-helper-spacing";
-            document.head.appendChild(el);
-          }
-          el.textContent =
-            "* { letter-spacing: " +
-            sp +
-            "px !important; word-spacing: " +
-            sp * 2 +
-            "px !important; }";
-        } else {
-          if (el) el.remove();
-        }
-      },
-      args: [spacing],
-    });
-  });
-}
-
-// ============================================
-// LINE HEIGHT
-// ============================================
-function injectLineHeight(height) {
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    if (!tabs[0]) return;
-
-    chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      func: function (h) {
-        var el = document.getElementById("a11y-helper-lineheight");
-        if (h !== 1.5) {
-          if (!el) {
-            el = document.createElement("style");
-            el.id = "a11y-helper-lineheight";
-            document.head.appendChild(el);
-          }
-          el.textContent =
-            "p, span, a, li, td, th, div { line-height: " +
-            h +
-            " !important; }";
-        } else {
-          if (el) el.remove();
-        }
-      },
-      args: [height],
-    });
-  });
-}
-
-// ============================================
-// READING GUIDE (follows cursor)
-// ============================================
-function injectReadingGuide(enabled) {
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    if (!tabs[0]) return;
-
-    chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      func: function (on) {
-        var guide = document.getElementById("a11y-reading-guide");
-        if (on) {
-          if (!guide) {
-            guide = document.createElement("div");
-            guide.id = "a11y-reading-guide";
-            guide.style.cssText =
-              "position: fixed; left: 0; right: 0; height: 40px; background: rgba(255, 255, 0, 0.2); pointer-events: none; z-index: 999999; border-top: 2px solid #ff0; border-bottom: 2px solid #ff0; transition: top 0.05s ease;";
-            document.body.appendChild(guide);
-
-            document.addEventListener("mousemove", function (e) {
-              var g = document.getElementById("a11y-reading-guide");
-              if (g) g.style.top = e.clientY - 20 + "px";
-            });
-          }
-        } else {
-          if (guide) guide.remove();
-        }
-      },
-      args: [enabled],
-    });
-  });
-}
-
-// ============================================
-// HIGHLIGHT LINKS
-// ============================================
-function injectHighlightLinks(enabled) {
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    if (!tabs[0]) return;
-
-    chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      func: function (on) {
-        var el = document.getElementById("a11y-helper-highlightlinks");
-        if (on) {
-          if (!el) {
-            el = document.createElement("style");
-            el.id = "a11y-helper-highlightlinks";
-            document.head.appendChild(el);
-          }
-          el.textContent =
-            "a { background: #ff0 !important; color: #000 !important; padding: 2px 4px !important; text-decoration: underline !important; font-weight: bold !important; }" +
-            "a:hover { background: #0ff !important; }";
-        } else {
-          if (el) el.remove();
-        }
-      },
-      args: [enabled],
-    });
-  });
-}
-
-// ============================================
-// BIG CURSOR
-// ============================================
-function injectBigCursor(enabled) {
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    if (!tabs[0]) return;
-
-    chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      func: function (on) {
-        var el = document.getElementById("a11y-helper-bigcursor");
-        if (on) {
-          if (!el) {
-            el = document.createElement("style");
-            el.id = "a11y-helper-bigcursor";
-            document.head.appendChild(el);
-          }
-          // Large black cursor with white outline for visibility
-          el.textContent =
-            '* { cursor: url(\'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24"><path fill="white" stroke="black" stroke-width="1" d="M5 3l14 9-8 1-4 8z"/></svg>\') 4 4, auto !important; }';
-        } else {
-          if (el) el.remove();
-        }
-      },
-      args: [enabled],
-    });
-  });
-}
-
-// ============================================
-// COLOR BLINDNESS FILTERS
-// ============================================
-function injectColorFilter(filter) {
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    if (!tabs[0]) return;
-
-    chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      func: function (filterType) {
-        var el = document.getElementById("a11y-helper-colorfilter");
-        if (filterType !== "none") {
-          if (!el) {
-            el = document.createElement("style");
-            el.id = "a11y-helper-colorfilter";
-            document.head.appendChild(el);
-          }
-
-          var filters = {
-            protanopia: 'url("#protanopia")',
-            deuteranopia: 'url("#deuteranopia")',
-            tritanopia: 'url("#tritanopia")',
-          };
-
-          // Create SVG filters if they don't exist
-          var svg = document.getElementById("a11y-color-filters");
-          if (!svg) {
-            svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-            svg.id = "a11y-color-filters";
-            svg.style.position = "absolute";
-            svg.style.width = "0";
-            svg.style.height = "0";
-            svg.innerHTML =
-              "<defs>" +
-              '<filter id="protanopia"><feColorMatrix type="matrix" values="0.567,0.433,0,0,0 0.558,0.442,0,0,0 0,0.242,0.758,0,0 0,0,0,1,0"/></filter>' +
-              '<filter id="deuteranopia"><feColorMatrix type="matrix" values="0.625,0.375,0,0,0 0.7,0.3,0,0,0 0,0.3,0.7,0,0 0,0,0,1,0"/></filter>' +
-              '<filter id="tritanopia"><feColorMatrix type="matrix" values="0.95,0.05,0,0,0 0,0.433,0.567,0,0 0,0.475,0.525,0,0 0,0,0,1,0"/></filter>' +
-              "</defs>";
-            document.body.appendChild(svg);
-          }
-
-          el.textContent =
-            "html { filter: " + filters[filterType] + " !important; }";
-        } else {
-          if (el) el.remove();
-        }
-      },
-      args: [filter],
-    });
-  });
-}
-
-// ============================================
-// VISUAL ALERTS (screen flash)
-// ============================================
-function injectVisualAlerts(enabled) {
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    if (!tabs[0]) return;
-
-    chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      func: function (on) {
-        var el = document.getElementById("a11y-helper-visualalerts");
-        if (on) {
-          if (!el) {
-            el = document.createElement("style");
-            el.id = "a11y-helper-visualalerts";
-            document.head.appendChild(el);
-          }
-          el.textContent =
-            "@keyframes a11y-flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }" +
-            "html:focus-within { animation: a11y-flash 0.5s ease-out; }";
-        } else {
-          if (el) el.remove();
-        }
-      },
-      args: [enabled],
-    });
-  });
-}
-
-// ============================================
-// ENHANCED FOCUS INDICATOR
-// ============================================
-function injectFocusIndicator(enabled) {
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    if (!tabs[0]) return;
-
-    chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      func: function (on) {
-        var el = document.getElementById("a11y-helper-focusindicator");
-        if (on) {
-          if (!el) {
-            el = document.createElement("style");
-            el.id = "a11y-helper-focusindicator";
-            document.head.appendChild(el);
-          }
-          el.textContent =
-            "*:focus { outline: 4px solid #ff0 !important; outline-offset: 4px !important; box-shadow: 0 0 0 8px rgba(255,255,0,0.3) !important; }" +
-            "*:focus-visible { outline: 4px solid #ff0 !important; outline-offset: 4px !important; box-shadow: 0 0 0 8px rgba(255,255,0,0.3) !important; }";
-        } else {
-          if (el) el.remove();
-        }
-      },
-      args: [enabled],
-    });
-  });
-}
-
-// ============================================
-// LIVE CAPTIONS - words show in popup (tab runs mic, sends here)
-// ============================================
-var isListening = false;
-var captionsTabId = null;
-var captionPollTimer = null;
-var CAPTION_STORAGE_KEY = "a11yLiveCaptionText";
-
-function showCaptionText(text) {
-  var d = document.getElementById("captionDisplay");
-  if (d) {
-    d.textContent = text || "";
-    d.scrollTop = d.scrollHeight;
-  }
-}
-
-function startCaptionPolling() {
-  if (captionPollTimer) return;
-  captionPollTimer = setInterval(function () {
-    if (!isListening) return;
-    chrome.storage.local.get(CAPTION_STORAGE_KEY, function (data) {
-      var t = data[CAPTION_STORAGE_KEY];
-      if (t !== undefined) showCaptionText(t);
-    });
-  }, 150);
-}
-
-function stopCaptionPolling() {
-  if (captionPollTimer) {
-    clearInterval(captionPollTimer);
-    captionPollTimer = null;
-  }
-}
-
-chrome.runtime.onMessage.addListener(function (msg) {
-  if (msg.type === "a11yCaptionText") {
-    showCaptionText(msg.text);
-  }
-  if (msg.type === "a11yCaptionStarted") {
-    isListening = true;
-    startCaptionPolling();
-    var statusEl = document.getElementById("captionStatus");
-    if (statusEl) {
-      statusEl.className = "caption-status listening";
-      var st = statusEl.querySelector(".status-text");
-      if (st) st.textContent = "Listening...";
-    }
-    document.getElementById("startCaptionsBtn").classList.add("active");
-  }
-  if (msg.type === "a11yCaptionDenied") {
-    isListening = false;
-    stopCaptionPolling();
-    alert("Microphone denied. Open a normal webpage (e.g. google.com), click the mic again, and click Allow.");
-    var statusEl = document.getElementById("captionStatus");
-    if (statusEl) {
-      statusEl.className = "caption-status idle";
-      var st = statusEl.querySelector(".status-text");
-      if (st) st.textContent = "Ready";
-    }
-    document.getElementById("startCaptionsBtn").classList.remove("active");
-  }
-});
-
-chrome.storage.onChanged.addListener(function (changes, area) {
-  if (area === "local" && changes[CAPTION_STORAGE_KEY]) {
-    showCaptionText(changes[CAPTION_STORAGE_KEY].newValue);
-  }
-});
-
-function startCaptions() {
-  if (isListening) return;
-  var display = document.getElementById("captionDisplay");
-  if (display) {
-    display.textContent = "";
-    display.innerHTML = "";
-  }
-  chrome.storage.local.set({ [CAPTION_STORAGE_KEY]: "" });
-
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    var tab = tabs[0];
-    if (!tab || !tab.id) {
-      alert("Open a normal webpage first (e.g. google.com), then try again.");
-      return;
-    }
-    var url = (tab.url || "");
-    if (url.indexOf("chrome://") === 0 || url.indexOf("chrome-extension://") === 0) {
-      alert("Open a normal website like google.com in this tab, then click the mic again.");
-      return;
-    }
-    captionsTabId = tab.id;
-    isListening = true;
-    startCaptionPolling();
-    var statusEl = document.getElementById("captionStatus");
-    if (statusEl) {
-      statusEl.className = "caption-status listening";
-      var st = statusEl.querySelector(".status-text");
-      if (st) st.textContent = "Listening...";
-    }
-    document.getElementById("startCaptionsBtn").classList.add("active");
-
-    chrome.scripting.executeScript(
-      { target: { tabId: tab.id }, files: ["content-captions.js"] },
-      function () {
-        if (chrome.runtime.lastError) {
-          isListening = false;
-          stopCaptionPolling();
-          document.getElementById("startCaptionsBtn").classList.remove("active");
-          if (statusEl) {
-            statusEl.className = "caption-status idle";
-            var st = statusEl.querySelector(".status-text");
-            if (st) st.textContent = "Ready";
-          }
-          alert("Open a normal website (e.g. google.com) and try again.");
-          return;
-        }
-        chrome.tabs.sendMessage(tab.id, { action: "startCaptions" }, function () {
-          if (chrome.runtime.lastError) {
-            isListening = false;
-            stopCaptionPolling();
-            document.getElementById("startCaptionsBtn").classList.remove("active");
-            if (statusEl) {
-              statusEl.className = "caption-status idle";
-              var st = statusEl.querySelector(".status-text");
-              if (st) st.textContent = "Ready";
-            }
-          }
-        });
-      }
-    );
-  });
-}
-
-function stopCaptions() {
-  isListening = false;
-  stopCaptionPolling();
-  if (captionsTabId) {
-    try {
-      chrome.tabs.sendMessage(captionsTabId, { action: "stopCaptions" });
-    } catch (e) {}
-    captionsTabId = null;
-  }
-  var statusEl = document.getElementById("captionStatus");
-  if (statusEl) {
-    statusEl.className = "caption-status idle";
-    var st = statusEl.querySelector(".status-text");
-    if (st) st.textContent = "Ready";
-  }
-  var display = document.getElementById("captionDisplay");
-  if (display) {
-    display.innerHTML = "<span class=\"placeholder-text\">Your words will appear here...</span>";
-  }
-  chrome.storage.local.set({ [CAPTION_STORAGE_KEY]: "" });
-  document.getElementById("startCaptionsBtn").classList.remove("active");
-}
-
-function clearCaptions() {
-  var display = document.getElementById("captionDisplay");
-  if (display) {
-    display.innerHTML = "<span class=\"placeholder-text\">Your words will appear here...</span>";
-  }
-}

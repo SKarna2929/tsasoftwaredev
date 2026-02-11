@@ -1,15 +1,28 @@
 {
   "manifest_version": 3,
-  "name": "Accessibility Helper",
-  "description": "Text-to-speech, high contrast, text size, and live captions for accessibility",
-  "version": "1.0.0",
+  "name": "A.E.G.I.S. — Accessibility Toolkit",
+  "description": "Adaptive Experience & Guidance Intelligence System — advanced accessibility suite with vision enhancement, color blindness correction, text-to-speech in 22 languages, live transcription, and more.",
+  "version": "3.0.0",
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "Accessibility Helper"
+    "default_title": "A.E.G.I.S. — Breaking Every Barrier"
   },
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["activeTab", "scripting", "storage", "tabs", "<all_urls>"],
-  "host_permissions": ["<all_urls>"]
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-widget.js"],
+      "css": ["widget.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "web_accessible_resources": [
+    {
+      "resources": ["captions.html", "content-captions.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

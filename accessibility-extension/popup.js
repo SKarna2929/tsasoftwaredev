@@ -721,11 +721,19 @@ function injectFocusIndicator(enabled) {
 }
 
 // ============================================
-// LIVE CAPTIONS
+// LIVE CAPTIONS (run in tab so mic prompt is for the page you're on)
 // ============================================
 var recognition = null;
 var isListening = false;
 var finalTranscript = "";
+var captionsTabId = null;
+
+var CAPTIONS_MIC_DENIED_MSG =
+  "Microphone access denied.\n\n" +
+  "To fix:\n" +
+  "1. When Chrome asks, click \"Allow\" for this page or for the extension.\n" +
+  "2. If you already blocked it: click the lock or info icon in the address bar → Site settings → set Microphone to Allow.\n" +
+  "3. Or go to Chrome Settings → Privacy and security → Site settings → Microphone and allow this site or \"Ask before accessing\".";
 
 function startCaptions() {
   var SpeechRecognition =
@@ -736,45 +744,121 @@ function startCaptions() {
   }
   if (isListening) return;
 
-  // Request microphone permission first
+  // Run in the active tab so the mic permission prompt is for the current page (usually works better)
+  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+    var tab = tabs[0];
+    if (!tab || !tab.id) {
+      alert("No tab found. Open a webpage and try again.");
+      return;
+    }
+    if (tab.url && (tab.url.startsWith("chrome://") || tab.url.startsWith("chrome-extension://"))) {
+      // Can't inject into Chrome internal pages; fall back to popup mic
+      requestMicInPopup();
+      return;
+    }
+    captionsTabId = tab.id;
+    chrome.scripting.executeScript(
+      {
+        target: { tabId: tab.id },
+        func: runCaptionsInPage,
+      },
+      function () {
+        if (chrome.runtime.lastError) {
+          requestMicInPopup();
+        }
+        // Success/denial are reported via chrome.runtime.onMessage (captionStarted / captionDenied)
+      },
+    );
+  });
+}
+
+function runCaptionsInPage() {
+  var SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    chrome.runtime.sendMessage({ type: "captionDenied" });
+    return;
+  }
   navigator.mediaDevices
     .getUserMedia({ audio: true })
     .then(function (stream) {
-      // Stop the stream immediately - we just needed permission
+      stream.getTracks().forEach(function (t) {
+        t.stop();
+      });
+      var recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+      window.__a11yRecognition = recognition;
+      recognition.onresult = function (e) {
+        var finalT = "";
+        var interim = "";
+        for (var i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) {
+            finalT += e.results[i][0].transcript + " ";
+          } else {
+            interim += e.results[i][0].transcript;
+          }
+        }
+        try {
+          chrome.runtime.sendMessage({
+            type: "captionResult",
+            final: finalT,
+            interim: interim,
+          });
+        } catch (err) {}
+      };
+      recognition.onerror = function (e) {
+        if (e.error === "not-allowed") {
+          chrome.runtime.sendMessage({ type: "captionDenied" });
+        }
+      };
+      recognition.onend = function () {
+        if (window.__a11yListening) {
+          try {
+            recognition.start();
+          } catch (err) {}
+        }
+      };
+      window.__a11yListening = true;
+      recognition.start();
+      chrome.runtime.sendMessage({ type: "captionStarted" });
+    })
+    .catch(function () {
+      chrome.runtime.sendMessage({ type: "captionDenied" });
+    });
+}
+
+// Fallback: request mic in popup (for chrome:// pages or if tab injection fails)
+function requestMicInPopup() {
+  navigator.mediaDevices
+    .getUserMedia({ audio: true })
+    .then(function (stream) {
       stream.getTracks().forEach(function (track) {
         track.stop();
       });
-
-      // Now start speech recognition
       initRecognition();
     })
     .catch(function (err) {
-      alert(
-        "Microphone access denied. Please allow microphone access and try again.",
-      );
+      alert(CAPTIONS_MIC_DENIED_MSG);
     });
 }
 
 function initRecognition() {
   var SpeechRecognition =
     window.SpeechRecognition || window.webkitSpeechRecognition;
-
   recognition = new SpeechRecognition();
   recognition.continuous = true;
   recognition.interimResults = true;
   recognition.lang = "en-US";
-
   var display = document.getElementById("captionDisplay");
-
   recognition.onstart = function () {
     isListening = true;
     var statusEl = document.getElementById("captionStatus");
     statusEl.className = "caption-status listening";
     statusEl.querySelector(".status-text").textContent = "Listening...";
-    // Update mic button state
     document.getElementById("startCaptionsBtn").classList.add("active");
   };
-
   recognition.onresult = function (e) {
     var interim = "";
     for (var i = e.resultIndex; i < e.results.length; i++) {
@@ -787,12 +871,10 @@ function initRecognition() {
     display.textContent = finalTranscript + interim;
     display.scrollTop = display.scrollHeight;
   };
-
   recognition.onerror = function (e) {
-    if (e.error === "not-allowed") alert("Microphone access denied.");
+    if (e.error === "not-allowed") alert(CAPTIONS_MIC_DENIED_MSG);
     stopCaptions();
   };
-
   recognition.onend = function () {
     if (isListening) {
       try {
@@ -802,17 +884,69 @@ function initRecognition() {
       }
     }
   };
-
   recognition.start();
 }
 
+// Listen for caption text and status from the tab
+chrome.runtime.onMessage.addListener(function (msg) {
+  if (msg.type === "captionResult") {
+    var display = document.getElementById("captionDisplay");
+    if (display) {
+      finalTranscript += msg.final || "";
+      display.textContent = finalTranscript + (msg.interim || "");
+      display.scrollTop = display.scrollHeight;
+    }
+  }
+  if (msg.type === "captionStarted") {
+    isListening = true;
+    finalTranscript = "";
+    var statusEl = document.getElementById("captionStatus");
+    if (statusEl) {
+      statusEl.className = "caption-status listening";
+      var st = statusEl.querySelector(".status-text");
+      if (st) st.textContent = "Listening...";
+    }
+    document.getElementById("startCaptionsBtn").classList.add("active");
+  }
+  if (msg.type === "captionDenied") {
+    stopCaptions();
+    alert(CAPTIONS_MIC_DENIED_MSG);
+  }
+});
+
 function stopCaptions() {
   isListening = false;
-  if (recognition) recognition.stop();
+  if (recognition) {
+    try {
+      recognition.stop();
+    } catch (err) {}
+    recognition = null;
+  }
+  if (captionsTabId) {
+    try {
+      chrome.scripting.executeScript({
+        target: { tabId: captionsTabId },
+        func: function () {
+          if (window.__a11yListening) {
+            window.__a11yListening = false;
+            if (window.__a11yRecognition) {
+              try {
+                window.__a11yRecognition.stop();
+              } catch (e) {}
+              window.__a11yRecognition = null;
+            }
+          }
+        },
+      });
+    } catch (err) {}
+    captionsTabId = null;
+  }
   var statusEl = document.getElementById("captionStatus");
-  statusEl.className = "caption-status idle";
-  statusEl.querySelector(".status-text").textContent = "Ready";
-  // Update mic button state
+  if (statusEl) {
+    statusEl.className = "caption-status idle";
+    var st = statusEl.querySelector(".status-text");
+    if (st) st.textContent = "Ready";
+  }
   document.getElementById("startCaptionsBtn").classList.remove("active");
 }
 

@@ -13,6 +13,7 @@
   const host = document.createElement("div");
   host.id = "aegis-widget-root";
   document.body.appendChild(host);
+  host.classList.add("corner-bottom-right");
 
   const shadow = host.attachShadow({ mode: "open" });
 
@@ -30,6 +31,10 @@
 :host {
   all: initial;
   display: block;
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483647;
   --arc-200: #7fddff; --arc-300: #4dcfff; --arc-400: #1ac2ff;
   --arc-500: #00b4ff; --arc-600: #0099e6;
   --gold-400: #ffd700;
@@ -57,6 +62,19 @@
   animation: fabPulse 3s ease-in-out infinite;
   display: flex; align-items: center; justify-content: center;
   transition: all 0.3s ease; z-index: 10;
+  touch-action: none;
+}
+.aegis-fab.dragging { transition: none; }
+.aegis-fab.magnet {
+  box-shadow: 0 0 28px var(--glow-arc-strong), 0 6px 28px rgba(0,0,0,0.5);
+}
+.aegis-fab.magnet-x { transform: scaleX(1.12) scaleY(0.96); }
+.aegis-fab.magnet-y { transform: scaleY(1.12) scaleX(0.96); }
+.aegis-fab.magnet-corner { transform: scale(1.08); }
+
+:host(.dragging) .aegis-panel {
+  opacity: 0;
+  pointer-events: none;
 }
 .aegis-fab:hover {
   transform: scale(1.1);
@@ -99,6 +117,29 @@
 .aegis-panel.open {
   transform: scale(1) translateY(0); opacity: 1;
   pointer-events: all;
+}
+
+:host(.corner-bottom-left) .aegis-panel {
+  bottom: 66px; left: 0; right: auto; top: auto;
+  transform-origin: bottom left;
+}
+:host(.corner-bottom-right) .aegis-panel {
+  bottom: 66px; right: 0; left: auto; top: auto;
+  transform-origin: bottom right;
+}
+:host(.corner-top-left) .aegis-panel {
+  top: 66px; left: 0; right: auto; bottom: auto;
+  transform-origin: top left;
+  transform: scale(0.9) translateY(-10px);
+}
+:host(.corner-top-right) .aegis-panel {
+  top: 66px; right: 0; left: auto; bottom: auto;
+  transform-origin: top right;
+  transform: scale(0.9) translateY(-10px);
+}
+:host(.corner-top-left) .aegis-panel.open,
+:host(.corner-top-right) .aegis-panel.open {
+  transform: scale(1) translateY(0);
 }
 
 /* Scanline overlay */
@@ -167,6 +208,25 @@
   animation: blink 1.5s ease-in-out infinite;
 }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.power-switch {
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.power-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 8px; letter-spacing: 1px;
+  color: var(--text-muted);
+}
+.aegis-panel.power-off .panel-body,
+.aegis-panel.power-off .nav-tabs,
+.aegis-panel.power-off .panel-footer {
+  filter: blur(4px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+.aegis-panel.power-off .header-left {
+  opacity: 0.6;
+}
 
 /* === NAV TABS === */
 .nav-tabs {
@@ -447,6 +507,7 @@
 .hint-text { font-family: 'Share Tech Mono', monospace; color: var(--text-muted); font-size: 9px; }
 .hint-text a { color: var(--arc-400); text-decoration: none; font-weight: 600; }
 .hint-text a:hover { color: var(--arc-200); text-decoration: underline; }
+.info-text { font-family: 'Share Tech Mono', monospace; color: var(--text-muted); font-size: 9px; }
 
 /* === RESET === */
 .reset-btn {
@@ -537,7 +598,12 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
         <div class="header-sub">ACCESSIBILITY INTELLIGENCE</div>
       </div>
     </div>
-    <div class="active-badge"><span class="dot"></span><span id="activeCount">0</span> ACTIVE</div>
+    <div class="power-switch">
+      <span class="power-label">POWER</span>
+      <button class="toggle-btn active" id="masterSwitch" aria-label="Toggle system power">
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+      </button>
+    </div>
   </div>
 
   <nav class="nav-tabs">
@@ -634,6 +700,10 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
             <button class="play-btn" id="playTTS"><span style="font-size:16px">▶</span></button>
             <button class="stop-btn" id="stopTTS"><span style="font-size:12px">■</span></button>
           </div>
+          <div class="section-label" style="margin-top:8px">Selection Reader</div>
+          <div class="control-row"><span class="control-label"><span class="label-icon">✨</span> Speak Selection</span>
+            <button class="toggle-btn" id="selectionReader"><span class="toggle-track"><span class="toggle-thumb"></span></span></button></div>
+          <div class="info-text" style="opacity:0.7;margin-top:4px">Highlight text on the page to hear it spoken or translated.</div>
         </div>
       </div>
     </section>
@@ -722,12 +792,194 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
   const fab = $("#aegisFab");
   const panel = $("#aegisPanel");
   let panelOpen = false;
+  let isDragging = false;
+  let dragMoved = false;
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
+  const snapMargin = 16;
+  const magnetDistance = 60;
+
+  function setCornerClass(corner) {
+    host.classList.remove(
+      "corner-top-left",
+      "corner-top-right",
+      "corner-bottom-left",
+      "corner-bottom-right",
+    );
+    host.classList.add(corner);
+  }
+
+  function getCurrentCorner() {
+    if (host.classList.contains("corner-top-left")) return "corner-top-left";
+    if (host.classList.contains("corner-top-right")) return "corner-top-right";
+    if (host.classList.contains("corner-bottom-left"))
+      return "corner-bottom-left";
+    return "corner-bottom-right";
+  }
+
+  function getCornerFromPosition(centerX, centerY) {
+    const isLeft = centerX < window.innerWidth / 2;
+    const isTop = centerY < window.innerHeight / 2;
+    if (isTop && isLeft) return "corner-top-left";
+    if (isTop && !isLeft) return "corner-top-right";
+    if (!isTop && isLeft) return "corner-bottom-left";
+    return "corner-bottom-right";
+  }
+
+  function getCornerTarget(corner, size) {
+    const maxLeft = window.innerWidth - size - snapMargin;
+    const maxTop = window.innerHeight - size - snapMargin;
+    switch (corner) {
+      case "corner-top-left":
+        return { left: snapMargin, top: snapMargin };
+      case "corner-top-right":
+        return { left: maxLeft, top: snapMargin };
+      case "corner-bottom-left":
+        return { left: snapMargin, top: maxTop };
+      default:
+        return { left: maxLeft, top: maxTop };
+    }
+  }
+
+  function applyMagnetClasses(distances) {
+    const { left, right, top, bottom } = distances;
+    fab.classList.remove("magnet", "magnet-x", "magnet-y", "magnet-corner");
+    const minEdge = Math.min(left, right, top, bottom);
+    if (minEdge > magnetDistance) return;
+
+    const nearHorizontal = left < magnetDistance || right < magnetDistance;
+    const nearVertical = top < magnetDistance || bottom < magnetDistance;
+    fab.classList.add("magnet");
+    if (nearHorizontal && nearVertical) {
+      fab.classList.add("magnet-corner");
+    } else if (nearHorizontal) {
+      fab.classList.add("magnet-x");
+    } else if (nearVertical) {
+      fab.classList.add("magnet-y");
+    }
+  }
+
+  function animateSnap(from, to, corner) {
+    const start = performance.now();
+    const duration = 260;
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+    function step(now) {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = easeOutCubic(t);
+      const left = from.left + (to.left - from.left) * eased;
+      const top = from.top + (to.top - from.top) * eased;
+      host.style.left = left + "px";
+      host.style.top = top + "px";
+      host.style.right = "auto";
+      host.style.bottom = "auto";
+      if (t < 1) {
+        requestAnimationFrame(step);
+      } else {
+        setCornerClass(corner);
+        fab.classList.remove("magnet", "magnet-x", "magnet-y", "magnet-corner");
+      }
+    }
+    requestAnimationFrame(step);
+  }
 
   fab.addEventListener("click", (e) => {
     e.stopPropagation();
+    if (dragMoved) {
+      dragMoved = false;
+      return;
+    }
     panelOpen = !panelOpen;
     panel.classList.toggle("open", panelOpen);
     fab.classList.toggle("open", panelOpen);
+  });
+
+  fab.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    isDragging = true;
+    dragMoved = false;
+    if (panelOpen) {
+      panelOpen = false;
+      panel.classList.remove("open");
+      fab.classList.remove("open");
+    }
+    const rect = host.getBoundingClientRect();
+    dragOffsetX = e.clientX - rect.left;
+    dragOffsetY = e.clientY - rect.top;
+    fab.classList.add("dragging");
+    host.classList.add("dragging");
+    const size = fab.getBoundingClientRect().width;
+    host.style.width = size + "px";
+    host.style.height = size + "px";
+    fab.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  fab.addEventListener("pointermove", (e) => {
+    if (!isDragging) return;
+    const size = fab.getBoundingClientRect().width;
+    const maxLeft = window.innerWidth - size - snapMargin;
+    const maxTop = window.innerHeight - size - snapMargin;
+    let left = e.clientX - dragOffsetX;
+    let top = e.clientY - dragOffsetY;
+    left = Math.max(snapMargin, Math.min(maxLeft, left));
+    top = Math.max(snapMargin, Math.min(maxTop, top));
+
+    if (!dragMoved) {
+      const dx = left - (host.getBoundingClientRect().left || 0);
+      const dy = top - (host.getBoundingClientRect().top || 0);
+      if (Math.hypot(dx, dy) > 3) dragMoved = true;
+    }
+
+    host.style.left = left + "px";
+    host.style.top = top + "px";
+    host.style.right = "auto";
+    host.style.bottom = "auto";
+
+    const distances = {
+      left,
+      right: window.innerWidth - (left + size),
+      top,
+      bottom: window.innerHeight - (top + size),
+    };
+    applyMagnetClasses(distances);
+  });
+
+  fab.addEventListener("pointerup", (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+    fab.classList.remove("dragging");
+    host.classList.remove("dragging");
+    host.style.width = "";
+    host.style.height = "";
+    fab.releasePointerCapture(e.pointerId);
+
+    const rect = fab.getBoundingClientRect();
+    const size = rect.width;
+    const centerX = rect.left + size / 2;
+    const centerY = rect.top + size / 2;
+    const corner = getCornerFromPosition(centerX, centerY);
+    const target = getCornerTarget(corner, size);
+    animateSnap({ left: rect.left, top: rect.top }, target, corner);
+  });
+
+  fab.addEventListener("pointercancel", () => {
+    isDragging = false;
+    fab.classList.remove("dragging");
+    fab.classList.remove("magnet", "magnet-x", "magnet-y", "magnet-corner");
+    host.classList.remove("dragging");
+    host.style.width = "";
+    host.style.height = "";
+  });
+
+  window.addEventListener("resize", () => {
+    if (isDragging) return;
+    const size = fab.getBoundingClientRect().width || 56;
+    const corner = getCurrentCorner();
+    const target = getCornerTarget(corner, size);
+    host.style.left = target.left + "px";
+    host.style.top = target.top + "px";
+    host.style.right = "auto";
+    host.style.bottom = "auto";
   });
 
   // Close panel when clicking outside
@@ -762,6 +1014,7 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
   // ==========================================
   // 7. STATE
   // ==========================================
+  let masterEnabled = true;
   let textSize = 100;
   let letterSpacing = 0;
   let lineHeight = 1.5;
@@ -776,6 +1029,7 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
     bigCursor: false,
     visualAlerts: false,
     focusIndicator: false,
+    selectionReader: false,
   };
 
   // ==========================================
@@ -805,7 +1059,8 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
     if (letterSpacing !== 0) count++;
     if (lineHeight !== 1.5) count++;
     if (activeFilters.size > 0) count++;
-    $("#activeCount").textContent = count;
+    const activeEl = $("#activeCount");
+    if (activeEl) activeEl.textContent = count;
   }
 
   // ==========================================
@@ -976,23 +1231,175 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
     }
   }
 
+  function applySelectionReader(enable, langCode) {
+    if (enable) {
+      window.aegisWidgetSelectionLang = langCode || "en";
+      if (window.aegisWidgetSelectionHandler) return;
+      window.aegisWidgetSelectionHandler = async function () {
+        const selection = window.getSelection();
+        if (!selection) return;
+        const selectedText = selection.toString().trim();
+        if (!selectedText || selectedText.length > 500) return;
+
+        const anchorNode = selection.anchorNode;
+        if (anchorNode && host.contains(anchorNode)) return;
+
+        try {
+          const lang = window.aegisWidgetSelectionLang || "en";
+          let textToSpeak = selectedText;
+
+          if (lang !== "en") {
+            const response = await fetch(
+              "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=" +
+                lang +
+                "&dt=t&q=" +
+                encodeURIComponent(selectedText),
+            );
+            const data = await response.json();
+            if (data && data[0] && data[0][0] && data[0][0][0]) {
+              textToSpeak = data[0][0][0];
+            }
+          }
+
+          const utter = new SpeechSynthesisUtterance(textToSpeak);
+          utter.lang = langMap[lang] || "en-US";
+          utter.rate = 1.0;
+
+          const voice = findVoice(utter.lang);
+          if (voice) utter.voice = voice;
+
+          speechSynthesis.cancel();
+          speechSynthesis.speak(utter);
+        } catch (e) {
+          console.error("Selection reader error:", e);
+        }
+      };
+
+      document.addEventListener("mouseup", window.aegisWidgetSelectionHandler);
+      document.addEventListener("touchend", window.aegisWidgetSelectionHandler);
+    } else if (window.aegisWidgetSelectionHandler) {
+      document.removeEventListener(
+        "mouseup",
+        window.aegisWidgetSelectionHandler,
+      );
+      document.removeEventListener(
+        "touchend",
+        window.aegisWidgetSelectionHandler,
+      );
+      delete window.aegisWidgetSelectionHandler;
+      delete window.aegisWidgetSelectionLang;
+      speechSynthesis.cancel();
+    }
+  }
+
+  function haltAllEffects() {
+    document.documentElement.style.fontSize = "";
+    document.documentElement.style.filter = "";
+    document
+      .querySelectorAll(
+        "body *:not(#aegis-widget-root):not(#aegis-widget-root *)",
+      )
+      .forEach((el) => {
+        el.style.letterSpacing = "";
+        el.style.lineHeight = "";
+        el.style.filter = "";
+      });
+    [
+      "a11y-high-contrast",
+      "a11y-dyslexia-font",
+      "a11y-dyslexia-font-link",
+      "a11y-reading-guide",
+      "a11y-highlight-links",
+      "a11y-big-cursor",
+      "a11y-color-filter",
+      "a11y-svg-filters",
+      "a11y-visual-alerts",
+      "a11y-focus-indicator",
+    ].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    });
+    applySelectionReader(false, "en");
+    speechSynthesis.cancel();
+
+    if (captionActive) {
+      captionActive = false;
+      if (recognition) {
+        recognition.stop();
+        recognition = null;
+      }
+      setCaptionUI(false);
+    }
+  }
+
+  function applyAllFromState() {
+    applyTextSize(textSize);
+    applyLetterSpacing(letterSpacing);
+    applyLineHeight(lineHeight);
+    applyHighContrast(toggleStates.highContrast);
+    applyDyslexiaFont(toggleStates.dyslexiaFont);
+    applyReadingGuide(toggleStates.readingGuide);
+    applyHighlightLinks(toggleStates.highlightLinks);
+    applyBigCursor(toggleStates.bigCursor);
+    applyVisualAlerts(toggleStates.visualAlerts);
+    applyFocusIndicator(toggleStates.focusIndicator);
+
+    const filter = activeFilters.size ? Array.from(activeFilters)[0] : "none";
+    applyColorFilter(filter);
+
+    if (toggleStates.selectionReader) {
+      applySelectionReader(true, $("#ttsLanguage").value);
+    }
+  }
+
+  function setMasterState(enabled) {
+    masterEnabled = enabled;
+    const masterBtn = $("#masterSwitch");
+    masterBtn.classList.toggle("active", enabled);
+    panel.classList.toggle("power-off", !enabled);
+
+    if (enabled) {
+      applyAllFromState();
+      showToast("SYSTEM POWER: ONLINE", "⚡");
+    } else {
+      haltAllEffects();
+      showToast("SYSTEM POWER: OFFLINE — All modules halted", "⏸️");
+    }
+  }
+
+  function guardPower() {
+    if (!masterEnabled) {
+      showToast("System power offline — change queued", "⏸️");
+      return false;
+    }
+    return true;
+  }
+
   // ==========================================
   // 11. EVENT HANDLERS
   // ==========================================
+
+  $("#masterSwitch").addEventListener("click", () => {
+    setMasterState(!masterEnabled);
+  });
 
   // Text Size
   $("#increaseText").addEventListener("click", () => {
     textSize = Math.min(textSize + 10, 200);
     $("#textSizeValue").textContent = textSize + "%";
-    applyTextSize(textSize);
-    showToast("Font matrix: " + textSize + "%", "🔤");
+    if (guardPower()) {
+      applyTextSize(textSize);
+      showToast("Font matrix: " + textSize + "%", "🔤");
+    }
     updateActiveCount();
   });
   $("#decreaseText").addEventListener("click", () => {
     textSize = Math.max(textSize - 10, 50);
     $("#textSizeValue").textContent = textSize + "%";
-    applyTextSize(textSize);
-    showToast("Font matrix: " + textSize + "%", "🔤");
+    if (guardPower()) {
+      applyTextSize(textSize);
+      showToast("Font matrix: " + textSize + "%", "🔤");
+    }
     updateActiveCount();
   });
 
@@ -1000,15 +1407,19 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
   $("#increaseSpacing").addEventListener("click", () => {
     letterSpacing = Math.min(letterSpacing + 1, 10);
     $("#spacingValue").textContent = letterSpacing + "px";
-    applyLetterSpacing(letterSpacing);
-    showToast("Spacing vector: " + letterSpacing + "px", "↔️");
+    if (guardPower()) {
+      applyLetterSpacing(letterSpacing);
+      showToast("Spacing vector: " + letterSpacing + "px", "↔️");
+    }
     updateActiveCount();
   });
   $("#decreaseSpacing").addEventListener("click", () => {
     letterSpacing = Math.max(letterSpacing - 1, 0);
     $("#spacingValue").textContent = letterSpacing + "px";
-    applyLetterSpacing(letterSpacing);
-    showToast("Spacing vector: " + letterSpacing + "px", "↔️");
+    if (guardPower()) {
+      applyLetterSpacing(letterSpacing);
+      showToast("Spacing vector: " + letterSpacing + "px", "↔️");
+    }
     updateActiveCount();
   });
 
@@ -1016,15 +1427,19 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
   $("#increaseLineHeight").addEventListener("click", () => {
     lineHeight = Math.min(lineHeight + 0.25, 3.0);
     $("#lineHeightValue").textContent = lineHeight.toFixed(2);
-    applyLineHeight(lineHeight);
-    showToast("Line spacing: " + lineHeight.toFixed(2), "📐");
+    if (guardPower()) {
+      applyLineHeight(lineHeight);
+      showToast("Line spacing: " + lineHeight.toFixed(2), "📐");
+    }
     updateActiveCount();
   });
   $("#decreaseLineHeight").addEventListener("click", () => {
     lineHeight = Math.max(lineHeight - 0.25, 1.0);
     $("#lineHeightValue").textContent = lineHeight.toFixed(2);
-    applyLineHeight(lineHeight);
-    showToast("Line spacing: " + lineHeight.toFixed(2), "📐");
+    if (guardPower()) {
+      applyLineHeight(lineHeight);
+      showToast("Line spacing: " + lineHeight.toFixed(2), "📐");
+    }
     updateActiveCount();
   });
 
@@ -1034,8 +1449,10 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
     btn.addEventListener("click", () => {
       toggleStates[id] = !toggleStates[id];
       btn.classList.toggle("active", toggleStates[id]);
-      applyFn(toggleStates[id]);
-      showToast(toggleStates[id] ? onMsg : offMsg, icon);
+      if (guardPower()) {
+        applyFn(toggleStates[id]);
+        showToast(toggleStates[id] ? onMsg : offMsg, icon);
+      }
       updateActiveCount();
     });
   }
@@ -1090,6 +1507,23 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
     "🎯",
   );
 
+  setupToggle(
+    "selectionReader",
+    (enable) => {
+      const lang = $("#ttsLanguage").value;
+      applySelectionReader(enable, lang);
+    },
+    "Selection reader: ACTIVE — Highlight text to hear it",
+    "Selection reader: OFFLINE",
+    "✨",
+  );
+
+  $("#ttsLanguage").addEventListener("change", () => {
+    if (toggleStates.selectionReader) {
+      applySelectionReader(true, $("#ttsLanguage").value);
+    }
+  });
+
   // Color Filters
   $$(".filter-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -1097,19 +1531,23 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
       $$(".filter-btn").forEach((b) => b.classList.remove("active"));
       if (filter === "none") {
         activeFilters.clear();
-        applyColorFilter("none");
-        showToast("Color filters: CLEARED", "🌈");
+        if (guardPower()) {
+          applyColorFilter("none");
+          showToast("Color filters: CLEARED", "🌈");
+        }
       } else {
         btn.classList.add("active");
         activeFilters.clear();
         activeFilters.add(filter);
-        applyColorFilter(filter);
         const names = {
           protanopia: "Protanopia correction",
           deuteranopia: "Deuteranopia correction",
           tritanopia: "Tritanopia correction",
         };
-        showToast(names[filter] + ": ONLINE", "🎨");
+        if (guardPower()) {
+          applyColorFilter(filter);
+          showToast(names[filter] + ": ONLINE", "🎨");
+        }
       }
       updateActiveCount();
     });
@@ -1170,6 +1608,7 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
   }
 
   $("#playTTS").addEventListener("click", async () => {
+    if (!guardPower()) return;
     const text = $("#ttsText").value.trim();
     if (!text) {
       showToast("Input stream empty — enter text", "⚠️");
@@ -1302,6 +1741,7 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
   }
 
   $("#startCaptions").addEventListener("click", () => {
+    if (!guardPower()) return;
     if (captionActive) return;
     captionActive = true;
     setCaptionUI(true);
@@ -1344,6 +1784,7 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
   // 14. RESET ALL
   // ==========================================
   $("#resetAll").addEventListener("click", () => {
+    masterEnabled = true;
     textSize = 100;
     letterSpacing = 0;
     lineHeight = 1.5;
@@ -1358,7 +1799,12 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
     $("#spacingValue").textContent = "0px";
     $("#lineHeightValue").textContent = "1.50";
     $("#rateValue").textContent = "1.0x";
-    $$(".toggle-btn").forEach((b) => b.classList.remove("active"));
+    panel.classList.remove("power-off");
+    const masterBtn = $("#masterSwitch");
+    masterBtn.classList.add("active");
+    $$(".toggle-btn").forEach((b) => {
+      if (b.id !== "masterSwitch") b.classList.remove("active");
+    });
     $$(".filter-btn").forEach((b) => b.classList.remove("active"));
 
     // Captions
@@ -1371,6 +1817,7 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
     fullCaptionText = "";
     updateCaptionDisplay("", "");
     speechSynthesis.cancel();
+    applySelectionReader(false, "en");
 
     // Remove all injected page styles
     document.documentElement.style.fontSize = "";
@@ -1407,6 +1854,7 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
   // ==========================================
   document.addEventListener("keydown", (e) => {
     if (!e.altKey) return;
+    if (!masterEnabled) return;
     switch (e.key.toLowerCase()) {
       case "h":
         e.preventDefault();

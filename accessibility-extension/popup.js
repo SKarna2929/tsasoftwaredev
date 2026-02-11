@@ -69,22 +69,25 @@ document.addEventListener("DOMContentLoaded", () => {
   // === MASTER SWITCH CONTROL ===
   function setMasterState(enabled) {
     masterEnabled = enabled;
-    const panels = document.querySelectorAll(".tab-panel, .nav-tabs, .stat-bar");
+    const panels = document.querySelectorAll(
+      ".tab-panel, .nav-tabs, .stat-bar",
+    );
     const masterSwitch = document.getElementById("masterSwitch");
-    
+    document.body.classList.toggle("power-off", !enabled);
+
     if (enabled) {
-      panels.forEach(el => {
+      panels.forEach((el) => {
         el.style.filter = "";
         el.style.pointerEvents = "";
         el.style.opacity = "";
       });
     } else {
-      panels.forEach(el => {
+      panels.forEach((el) => {
         el.style.filter = "blur(4px)";
         el.style.pointerEvents = "none";
         el.style.opacity = "0.5";
       });
-      
+
       // Halt all active effects on the page
       executeInTab(() => {
         document.documentElement.style.fontSize = "";
@@ -94,10 +97,18 @@ document.addEventListener("DOMContentLoaded", () => {
           el.style.lineHeight = "";
           el.style.filter = "";
         });
-        ["a11y-high-contrast", "a11y-dyslexia-font", "a11y-dyslexia-font-link",
-         "a11y-reading-guide", "a11y-highlight-links", "a11y-big-cursor",
-         "a11y-color-filter", "a11y-svg-filters", "a11y-visual-alerts",
-         "a11y-focus-indicator"].forEach((id) => {
+        [
+          "a11y-high-contrast",
+          "a11y-dyslexia-font",
+          "a11y-dyslexia-font-link",
+          "a11y-reading-guide",
+          "a11y-highlight-links",
+          "a11y-big-cursor",
+          "a11y-color-filter",
+          "a11y-svg-filters",
+          "a11y-visual-alerts",
+          "a11y-focus-indicator",
+        ].forEach((id) => {
           const el = document.getElementById(id);
           if (el) el.remove();
         });
@@ -161,7 +172,11 @@ document.addEventListener("DOMContentLoaded", () => {
   function injectHighContrast(enable) {
     console.log("HIGH CONTRAST:", enable);
     if (enable) {
-      document.documentElement.style.setProperty("filter", "invert(1) hue-rotate(180deg)", "important");
+      document.documentElement.style.setProperty(
+        "filter",
+        "invert(1) hue-rotate(180deg)",
+        "important",
+      );
       console.log("Applied invert filter to html element");
     } else {
       document.documentElement.style.removeProperty("filter");
@@ -323,6 +338,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const id = "a11y-selection-reader";
 
     if (enable) {
+      window.aegisSelectionLang = langCode || "en";
+      window.aegisSelectionLangMap = langMap || {};
       if (window.aegisSelectionHandler) return; // Already enabled
 
       window.aegisSelectionHandler = async function () {
@@ -330,7 +347,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (selectedText.length > 0 && selectedText.length < 500) {
           try {
             // Translate if needed
-            const lang = langCode || "en";
+            const lang = window.aegisSelectionLang || "en";
             let textToSpeak = selectedText;
 
             if (lang !== "en") {
@@ -345,7 +362,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
             // Speak it
             const utter = new SpeechSynthesisUtterance(textToSpeak);
-            utter.lang = langMap[lang] || "en-US";
+            const map = window.aegisSelectionLangMap || {};
+            utter.lang = map[lang] || "en-US";
             utter.rate = 1.0;
 
             const voices = speechSynthesis.getVoices();
@@ -369,6 +387,8 @@ document.addEventListener("DOMContentLoaded", () => {
         document.removeEventListener("mouseup", window.aegisSelectionHandler);
         document.removeEventListener("touchend", window.aegisSelectionHandler);
         delete window.aegisSelectionHandler;
+        delete window.aegisSelectionLang;
+        delete window.aegisSelectionLangMap;
       }
       speechSynthesis.cancel();
     }
@@ -504,18 +524,21 @@ document.addEventListener("DOMContentLoaded", () => {
     masterEnabled = !masterEnabled;
     const btn = document.getElementById("masterSwitch");
     btn.classList.toggle("active", masterEnabled);
+    document.body.classList.toggle("power-off", !masterEnabled);
 
-    const panels = document.querySelectorAll(".tab-panel, .nav-tabs, .stat-bar");
-    
+    const panels = document.querySelectorAll(
+      ".tab-panel, .nav-tabs, .stat-bar",
+    );
+
     if (masterEnabled) {
-      panels.forEach(el => {
+      panels.forEach((el) => {
         el.style.filter = "";
         el.style.pointerEvents = "";
         el.style.opacity = "";
       });
       showToast("SYSTEM POWER: ONLINE", "⚡");
     } else {
-      panels.forEach(el => {
+      panels.forEach((el) => {
         el.style.filter = "blur(4px)";
         el.style.pointerEvents = "none";
         el.style.opacity = "0.5";

@@ -311,22 +311,26 @@ document.addEventListener("DOMContentLoaded", function () {
       doSpeak(text);
       return;
     }
-    fetch("https://libretranslate.com/translate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        q: text,
-        source: "en",
-        target: langCode,
-      }),
-    })
+    var url =
+      "https://api.mymemory.translated.net/get?q=" +
+      encodeURIComponent(text) +
+      "&langpair=en|" +
+      langCode;
+    fetch(url)
       .then(function (res) { return res.json(); })
       .then(function (data) {
-        var translated = data && data.translatedText;
-        doSpeak(translated ? translated : text);
+        var translated =
+          data &&
+          data.responseData &&
+          data.responseData.translatedText;
+        if (translated && data.responseStatus !== 403) {
+          doSpeak(translated, lang);
+        } else {
+          doSpeak(text, lang);
+        }
       })
       .catch(function () {
-        doSpeak(text);
+        doSpeak(text, lang);
       });
   }
 

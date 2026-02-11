@@ -14,6 +14,7 @@ var bigCursorOn = false;
 var currentFilter = "none";
 var speechRate = 1.0;
 var ttsLanguage = "en-US";
+var ttsVoiceName = "";
 var visualAlertsOn = false;
 var focusIndicatorOn = false;
 
@@ -192,6 +193,7 @@ document.addEventListener("DOMContentLoaded", function () {
     currentFilter = "none";
     speechRate = 1.0;
     ttsLanguage = "en-US";
+    ttsVoiceName = "";
     visualAlertsOn = false;
     focusIndicatorOn = false;
 
@@ -204,6 +206,11 @@ document.addEventListener("DOMContentLoaded", function () {
     if (langSelect) {
       langSelect.value = "en-US";
       localStorage.setItem("ttsLanguage", "en-US");
+    }
+    var voiceSelect = document.getElementById("ttsVoice");
+    if (voiceSelect) {
+      voiceSelect.value = "";
+      localStorage.setItem("ttsVoice", "");
     }
 
     // Reset all toggle buttons
@@ -234,6 +241,54 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  function populateVoiceList() {
+    var voices = window.speechSynthesis.getVoices();
+    var sel = document.getElementById("ttsVoice");
+    if (!sel) return;
+    var saved = localStorage.getItem("ttsVoice") || "";
+    sel.innerHTML = '<option value="">Default voice</option>';
+    for (var i = 0; i < voices.length; i++) {
+      var v = voices[i];
+      var label = v.name + (v.lang ? " (" + v.lang + ")" : "");
+      var value = v.name + "|" + (v.lang || "");
+      var opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = label;
+      sel.appendChild(opt);
+    }
+    if (saved && sel.querySelector('option[value="' + saved + '"]')) {
+      sel.value = saved;
+      ttsVoiceName = saved;
+    }
+  }
+  populateVoiceList();
+  if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = populateVoiceList;
+  }
+  var ttsVoiceSelect = document.getElementById("ttsVoice");
+  if (ttsVoiceSelect) {
+    ttsVoiceSelect.addEventListener("change", function () {
+      ttsVoiceName = this.value;
+      localStorage.setItem("ttsVoice", ttsVoiceName);
+    });
+  }
+
+  function getSelectedVoice() {
+    var name = (document.getElementById("ttsVoice") && document.getElementById("ttsVoice").value) || ttsVoiceName;
+    if (!name) return null;
+    var voices = window.speechSynthesis.getVoices();
+    var parts = name.split("|");
+    var wantName = parts[0];
+    var wantLang = parts[1] || "";
+    for (var i = 0; i < voices.length; i++) {
+      if (voices[i].name === wantName && (!wantLang || voices[i].lang === wantLang)) return voices[i];
+    }
+    for (var j = 0; j < voices.length; j++) {
+      if (voices[j].name === wantName) return voices[j];
+    }
+    return null;
+  }
+
   document.getElementById("speakBtn").addEventListener("click", function () {
     var text = document.getElementById("textInput").value.trim();
     if (text === "") {
@@ -246,6 +301,8 @@ document.addEventListener("DOMContentLoaded", function () {
     var utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang;
     utterance.rate = speechRate;
+    var voice = getSelectedVoice();
+    if (voice) utterance.voice = voice;
     window.speechSynthesis.speak(utterance);
   });
 
@@ -277,6 +334,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 var utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = lang;
                 utterance.rate = speechRate;
+                var voice = getSelectedVoice();
+                if (voice) utterance.voice = voice;
                 window.speechSynthesis.speak(utterance);
               } else {
                 alert("Please select some text on the page first.");

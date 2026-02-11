@@ -145,6 +145,25 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // ========== TRANSLATE PAGE (Google Translate) ==========
+  var translateBtn = document.getElementById("translatePageBtn");
+  if (translateBtn) {
+    translateBtn.addEventListener("click", function () {
+      var langSelect = document.getElementById("pageTranslateLang");
+      var targetLang = langSelect ? langSelect.value : "en";
+      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        if (!tabs[0] || !tabs[0].url) return;
+        var originalUrl = tabs[0].url;
+        var translateUrl =
+          "https://translate.google.com/translate?sl=auto&tl=" +
+          encodeURIComponent(targetLang) +
+          "&u=" +
+          encodeURIComponent(originalUrl);
+        chrome.tabs.create({ url: translateUrl });
+      });
+    });
+  }
+
   // =======================================================
   // INJECTION FUNCTIONS (run inside the target page)
   // =======================================================

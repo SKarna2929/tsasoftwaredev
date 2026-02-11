@@ -721,15 +721,47 @@ function injectFocusIndicator(enabled) {
 }
 
 // ============================================
-// LIVE CAPTIONS - simple popup-only, words show in the box
+// LIVE CAPTIONS - mic asked in the TAB (the webpage) so Chrome shows Allow
+// Words sent to popup via message so they appear in the box
 // ============================================
-var recognition = null;
 var isListening = false;
-var finalTranscript = "";
-var captionsStream = null;
+var captionsTabId = null;
 
 var CAPTIONS_MIC_DENIED_MSG =
-  "Microphone access denied. Click Allow when Chrome asks, or check Site settings for the microphone.";
+  "Microphone access denied. Make sure you're on a normal webpage (e.g. google.com), then click the mic again and choose Allow when Chrome asks.";
+
+// When the tab sends us spoken text, show it in the popup
+chrome.runtime.onMessage.addListener(function (msg) {
+  if (msg.type === "a11yCaptionText") {
+    var display = document.getElementById("captionDisplay");
+    if (display) {
+      display.textContent = msg.text || "";
+      display.scrollTop = display.scrollHeight;
+    }
+  }
+  if (msg.type === "a11yCaptionStarted") {
+    isListening = true;
+    var statusEl = document.getElementById("captionStatus");
+    if (statusEl) {
+      statusEl.className = "caption-status listening";
+      var st = statusEl.querySelector(".status-text");
+      if (st) st.textContent = "Listening...";
+    }
+    var btn = document.getElementById("startCaptionsBtn");
+    if (btn) btn.classList.add("active");
+  }
+  if (msg.type === "a11yCaptionDenied") {
+    isListening = false;
+    alert(CAPTIONS_MIC_DENIED_MSG);
+    var statusEl = document.getElementById("captionStatus");
+    if (statusEl) {
+      statusEl.className = "caption-status idle";
+      var st = statusEl.querySelector(".status-text");
+      if (st) st.textContent = "Ready";
+    }
+    document.getElementById("startCaptionsBtn").classList.remove("active");
+  }
+});
 
 function startCaptions() {
   if (typeof window.SpeechRecognition === "undefined" && typeof window.webkitSpeechRecognition === "undefined") {
@@ -738,86 +770,90 @@ function startCaptions() {
   }
   if (isListening) return;
 
-  finalTranscript = "";
   var display = document.getElementById("captionDisplay");
   if (display) {
     display.textContent = "";
     display.innerHTML = "";
   }
 
+  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+    var tab = tabs[0];
+    if (!tab || !tab.id) {
+      alert("Open a webpage first, then try again.");
+      return;
+    }
+    var url = tab.url || "";
+    if (url.indexOf("chrome://") === 0 || url.indexOf("chrome-extension://") === 0) {
+      alert("Open a normal website (e.g. google.com) in this tab, then click the mic again.");
+      return;
+    }
+    captionsTabId = tab.id;
+    chrome.scripting.executeScript(
+      { target: { tabId: tab.id }, func: runLiveCaptionsInPage },
+      function () {
+        if (chrome.runtime.lastError) {
+          alert("Cannot use captions on this page. Try a normal website like google.com.");
+        }
+      }
+    );
+  });
+}
+
+function runLiveCaptionsInPage() {
+  var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    chrome.runtime.sendMessage({ type: "a11yCaptionDenied" });
+    return;
+  }
   navigator.mediaDevices.getUserMedia({ audio: true })
     .then(function (stream) {
-      captionsStream = stream;
-      var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognition = new SpeechRecognition();
+      stream.getTracks().forEach(function (t) { t.stop(); });
+      var recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = "en-US";
-
-      recognition.onstart = function () {
-        isListening = true;
-        var statusEl = document.getElementById("captionStatus");
-        if (statusEl) {
-          statusEl.className = "caption-status listening";
-          var st = statusEl.querySelector(".status-text");
-          if (st) st.textContent = "Listening...";
-        }
-        var btn = document.getElementById("startCaptionsBtn");
-        if (btn) btn.classList.add("active");
-      };
-
+      var fullText = "";
       recognition.onresult = function (e) {
-        var displayEl = document.getElementById("captionDisplay");
-        if (!displayEl) return;
-        var interim = "";
         for (var i = e.resultIndex; i < e.results.length; i++) {
-          if (e.results[i].isFinal) {
-            finalTranscript += e.results[i][0].transcript + " ";
-          } else {
-            interim += e.results[i][0].transcript;
-          }
+          fullText += e.results[i][0].transcript;
+          if (e.results[i].isFinal) fullText += " ";
         }
-        displayEl.textContent = finalTranscript + interim;
-        displayEl.scrollTop = displayEl.scrollHeight;
+        chrome.runtime.sendMessage({ type: "a11yCaptionText", text: fullText });
       };
-
       recognition.onerror = function (e) {
-        if (e.error === "not-allowed") {
-          alert(CAPTIONS_MIC_DENIED_MSG);
-        }
-        stopCaptions();
+        if (e.error === "not-allowed") chrome.runtime.sendMessage({ type: "a11yCaptionDenied" });
       };
-
       recognition.onend = function () {
-        if (isListening) {
-          try {
-            recognition.start();
-          } catch (err) {
-            stopCaptions();
-          }
+        if (window.__a11yListening) {
+          try { recognition.start(); } catch (err) {}
         }
       };
-
+      window.__a11yListening = true;
+      window.__a11yRecognition = recognition;
       recognition.start();
+      chrome.runtime.sendMessage({ type: "a11yCaptionStarted" });
     })
     .catch(function () {
-      alert(CAPTIONS_MIC_DENIED_MSG);
+      chrome.runtime.sendMessage({ type: "a11yCaptionDenied" });
     });
 }
 
 function stopCaptions() {
   isListening = false;
-  if (recognition) {
+  if (captionsTabId) {
     try {
-      recognition.stop();
+      chrome.scripting.executeScript({
+        target: { tabId: captionsTabId },
+        func: function () {
+          window.__a11yListening = false;
+          if (window.__a11yRecognition) {
+            try { window.__a11yRecognition.stop(); } catch (e) {}
+            window.__a11yRecognition = null;
+          }
+        },
+      });
     } catch (err) {}
-    recognition = null;
-  }
-  if (captionsStream) {
-    try {
-      captionsStream.getTracks().forEach(function (t) { t.stop(); });
-    } catch (err) {}
-    captionsStream = null;
+    captionsTabId = null;
   }
   var statusEl = document.getElementById("captionStatus");
   if (statusEl) {

@@ -721,7 +721,7 @@ function injectFocusIndicator(enabled) {
 }
 
 // ============================================
-// LIVE CAPTIONS (run in tab so mic prompt is for the page you're on)
+// LIVE CAPTIONS (run in popup so words show in the same window)
 // ============================================
 var recognition = null;
 var isListening = false;
@@ -744,92 +744,16 @@ function startCaptions() {
   }
   if (isListening) return;
 
-  // Run in the active tab so the mic permission prompt is for the current page (usually works better)
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    var tab = tabs[0];
-    if (!tab || !tab.id) {
-      alert("No tab found. Open a webpage and try again.");
-      return;
-    }
-    if (tab.url && (tab.url.startsWith("chrome://") || tab.url.startsWith("chrome-extension://"))) {
-      // Can't inject into Chrome internal pages; fall back to popup mic
-      requestMicInPopup();
-      return;
-    }
-    captionsTabId = tab.id;
-    chrome.scripting.executeScript(
-      {
-        target: { tabId: tab.id },
-        func: runCaptionsInPage,
-      },
-      function () {
-        if (chrome.runtime.lastError) {
-          requestMicInPopup();
-        }
-        // Success/denial are reported via chrome.runtime.onMessage (captionStarted / captionDenied)
-      },
-    );
-  });
-}
-
-function runCaptionsInPage() {
-  var SpeechRecognition =
-    window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    chrome.runtime.sendMessage({ type: "captionDenied" });
-    return;
+  // Run in popup so the words appear in this window. Keep the popup open while talking.
+  finalTranscript = "";
+  var display = document.getElementById("captionDisplay");
+  if (display) {
+    display.textContent = "";
+    display.innerHTML = "";
   }
-  navigator.mediaDevices
-    .getUserMedia({ audio: true })
-    .then(function (stream) {
-      stream.getTracks().forEach(function (t) {
-        t.stop();
-      });
-      var recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = "en-US";
-      window.__a11yRecognition = recognition;
-      recognition.onresult = function (e) {
-        var finalT = "";
-        var interim = "";
-        for (var i = e.resultIndex; i < e.results.length; i++) {
-          if (e.results[i].isFinal) {
-            finalT += e.results[i][0].transcript + " ";
-          } else {
-            interim += e.results[i][0].transcript;
-          }
-        }
-        try {
-          chrome.runtime.sendMessage({
-            type: "captionResult",
-            final: finalT,
-            interim: interim,
-          });
-        } catch (err) {}
-      };
-      recognition.onerror = function (e) {
-        if (e.error === "not-allowed") {
-          chrome.runtime.sendMessage({ type: "captionDenied" });
-        }
-      };
-      recognition.onend = function () {
-        if (window.__a11yListening) {
-          try {
-            recognition.start();
-          } catch (err) {}
-        }
-      };
-      window.__a11yListening = true;
-      recognition.start();
-      chrome.runtime.sendMessage({ type: "captionStarted" });
-    })
-    .catch(function () {
-      chrome.runtime.sendMessage({ type: "captionDenied" });
-    });
+  requestMicInPopup();
 }
 
-// Fallback: request mic in popup (for chrome:// pages or if tab injection fails)
 function requestMicInPopup() {
   navigator.mediaDevices
     .getUserMedia({ audio: true })
@@ -852,11 +776,15 @@ function initRecognition() {
   recognition.interimResults = true;
   recognition.lang = "en-US";
   var display = document.getElementById("captionDisplay");
+  if (!display) return;
   recognition.onstart = function () {
     isListening = true;
     var statusEl = document.getElementById("captionStatus");
-    statusEl.className = "caption-status listening";
-    statusEl.querySelector(".status-text").textContent = "Listening...";
+    if (statusEl) {
+      statusEl.className = "caption-status listening";
+      var st = statusEl.querySelector(".status-text");
+      if (st) st.textContent = "Listening...";
+    }
     document.getElementById("startCaptionsBtn").classList.add("active");
   };
   recognition.onresult = function (e) {
@@ -887,33 +815,6 @@ function initRecognition() {
   recognition.start();
 }
 
-// Listen for caption text and status from the tab
-chrome.runtime.onMessage.addListener(function (msg) {
-  if (msg.type === "captionResult") {
-    var display = document.getElementById("captionDisplay");
-    if (display) {
-      finalTranscript += msg.final || "";
-      display.textContent = finalTranscript + (msg.interim || "");
-      display.scrollTop = display.scrollHeight;
-    }
-  }
-  if (msg.type === "captionStarted") {
-    isListening = true;
-    finalTranscript = "";
-    var statusEl = document.getElementById("captionStatus");
-    if (statusEl) {
-      statusEl.className = "caption-status listening";
-      var st = statusEl.querySelector(".status-text");
-      if (st) st.textContent = "Listening...";
-    }
-    document.getElementById("startCaptionsBtn").classList.add("active");
-  }
-  if (msg.type === "captionDenied") {
-    stopCaptions();
-    alert(CAPTIONS_MIC_DENIED_MSG);
-  }
-});
-
 function stopCaptions() {
   isListening = false;
   if (recognition) {
@@ -922,25 +823,7 @@ function stopCaptions() {
     } catch (err) {}
     recognition = null;
   }
-  if (captionsTabId) {
-    try {
-      chrome.scripting.executeScript({
-        target: { tabId: captionsTabId },
-        func: function () {
-          if (window.__a11yListening) {
-            window.__a11yListening = false;
-            if (window.__a11yRecognition) {
-              try {
-                window.__a11yRecognition.stop();
-              } catch (e) {}
-              window.__a11yRecognition = null;
-            }
-          }
-        },
-      });
-    } catch (err) {}
-    captionsTabId = null;
-  }
+  captionsTabId = null;
   var statusEl = document.getElementById("captionStatus");
   if (statusEl) {
     statusEl.className = "caption-status idle";

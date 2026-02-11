@@ -407,6 +407,10 @@ document.addEventListener("DOMContentLoaded", function () {
   document
     .getElementById("clearCaptionsBtn")
     .addEventListener("click", clearCaptions);
+  document.getElementById("openCaptionsTab").addEventListener("click", function (e) {
+    e.preventDefault();
+    chrome.tabs.create({ url: chrome.runtime.getURL("captions.html") });
+  });
 });
 
 // ============================================
@@ -790,8 +794,8 @@ function injectVisualAlerts(enabled) {
             document.head.appendChild(el);
           }
           el.textContent =
-            "@keyframes a11y-flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }" +
-            "html:focus-within { animation: a11y-flash 0.3s ease; }";
+            "@keyframes a11y-flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }" +
+            "html:focus-within { animation: a11y-flash 0.5s ease-out; }";
         } else {
           if (el) el.remove();
         }

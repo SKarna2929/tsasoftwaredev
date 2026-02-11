@@ -547,6 +547,19 @@ body.dark-mode .mic-btn.active {
   font-style: italic;
 }
 
+.hint-text {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+#openCaptionsTab {
+  color: var(--accent-secondary);
+  text-decoration: none;
+}
+#openCaptionsTab:hover {
+  text-decoration: underline;
+}
+
 /* Scrollbar */
 .caption-display::-webkit-scrollbar {
   width: 4px;

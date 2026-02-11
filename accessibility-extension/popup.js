@@ -490,20 +490,19 @@ function injectHighContrast(enabled) {
           }
 
           el.textContent =
-            // Use CSS filter to invert the whole page
-            "html { filter: invert(1) hue-rotate(180deg) !important; background: #fff !important; }" +
-            // Re-invert images, videos, canvas, svg so they look normal
-            "img, video, canvas, svg, picture, [style*='background-image'], " +
-            ".img, figure img, iframe { filter: invert(1) hue-rotate(180deg) !important; }" +
-            // Boost contrast on text elements
-            "p, span, h1, h2, h3, h4, h5, h6, a, li, td, th, label, " +
-            "button, input, textarea, select, blockquote, figcaption { " +
-            "  contrast: 1.2 !important; }" +
-            // Make links more visible with underline
-            "a { text-decoration: underline !important; }" +
-            // Enhance focus visibility
-            "*:focus { outline: 3px solid #0ff !important; outline-offset: 2px !important; }" +
-            "*:focus-visible { outline: 3px solid #0ff !important; outline-offset: 2px !important; }";
+            "html { color-scheme: dark !important; background: #000 !important; }" +
+            "body { background: #000 !important; color: #fff !important; }" +
+            "body, body * { background-color: #000 !important; color: #fff !important; " +
+            "  border-color: #fff !important; box-shadow: none !important; text-shadow: none !important; }" +
+            "a, a:visited { color: #00ffff !important; text-decoration: underline !important; }" +
+            "a:hover, a:focus { color: #ffff00 !important; }" +
+            "button, [role='button'], input, textarea, select { " +
+            "  background-color: #000 !important; color: #fff !important; " +
+            "  border: 2px solid #fff !important; }" +
+            "::placeholder { color: #d1d5db !important; }" +
+            "svg, svg * { fill: currentColor !important; stroke: currentColor !important; }" +
+            "img, video, canvas, picture { filter: none !important; }" +
+            "*:focus, *:focus-visible { outline: 3px solid #ffff00 !important; outline-offset: 2px !important; }";
         } else {
           if (el) el.remove();
         }

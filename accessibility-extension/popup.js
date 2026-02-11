@@ -932,19 +932,35 @@ function startCaptions() {
     }
     document.getElementById("startCaptionsBtn").classList.add("active");
 
-    chrome.tabs.sendMessage(tab.id, { action: "startCaptions" }, function (response) {
-      if (chrome.runtime.lastError) {
-        isListening = false;
-        stopCaptionPolling();
-        document.getElementById("startCaptionsBtn").classList.remove("active");
-        if (statusEl) {
-          statusEl.className = "caption-status idle";
-          var st = statusEl.querySelector(".status-text");
-          if (st) st.textContent = "Ready";
+    chrome.scripting.executeScript(
+      { target: { tabId: tab.id }, files: ["content-captions.js"] },
+      function () {
+        if (chrome.runtime.lastError) {
+          isListening = false;
+          stopCaptionPolling();
+          document.getElementById("startCaptionsBtn").classList.remove("active");
+          if (statusEl) {
+            statusEl.className = "caption-status idle";
+            var st = statusEl.querySelector(".status-text");
+            if (st) st.textContent = "Ready";
+          }
+          alert("Cannot use captions on this page. Open a normal website (e.g. google.com) and try again.");
+          return;
         }
-        alert("Reload the webpage (F5 or refresh), then try the mic again. Or open a different site like google.com.");
+        chrome.tabs.sendMessage(tab.id, { action: "startCaptions" }, function () {
+          if (chrome.runtime.lastError) {
+            isListening = false;
+            stopCaptionPolling();
+            document.getElementById("startCaptionsBtn").classList.remove("active");
+            if (statusEl) {
+              statusEl.className = "caption-status idle";
+              var st = statusEl.querySelector(".status-text");
+              if (st) st.textContent = "Ready";
+            }
+          }
+        });
       }
-    });
+    );
   });
 }
 

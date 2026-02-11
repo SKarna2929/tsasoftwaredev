@@ -240,7 +240,8 @@ document.addEventListener("DOMContentLoaded", function () {
       alert("Please type some text to read aloud.");
       return;
     }
-    var lang = document.getElementById("ttsLanguage").value;
+    var langSelect = document.getElementById("ttsLanguage");
+    var lang = (langSelect && langSelect.value) || ttsLanguage || "en-US";
     window.speechSynthesis.cancel();
     var utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang;
@@ -270,7 +271,8 @@ document.addEventListener("DOMContentLoaded", function () {
             if (results && results[0] && results[0].result) {
               var text = results[0].result.trim();
               if (text) {
-                var lang = document.getElementById("ttsLanguage").value;
+                var langSelect = document.getElementById("ttsLanguage");
+                var lang = (langSelect && langSelect.value) || ttsLanguage || "en-US";
                 window.speechSynthesis.cancel();
                 var utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = lang;

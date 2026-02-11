@@ -289,6 +289,58 @@ document.addEventListener("DOMContentLoaded", function () {
     return null;
   }
 
+  function getLangCode(langValue) {
+    if (!langValue) return "en";
+    var part = langValue.split("-")[0];
+    return part || "en";
+  }
+
+  function getVoiceForLang(lang) {
+    var voices = window.speechSynthesis.getVoices();
+    var code = getLangCode(lang);
+    for (var i = 0; i < voices.length; i++) {
+      var v = voices[i];
+      if (v.lang && (v.lang === lang || v.lang.indexOf(code) === 0)) return v;
+    }
+    return null;
+  }
+
+  function translateThenSpeak(text, lang, doSpeak) {
+    var langCode = getLangCode(lang);
+    if (langCode === "en") {
+      doSpeak(text);
+      return;
+    }
+    fetch("https://libretranslate.com/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        q: text,
+        source: "en",
+        target: langCode,
+      }),
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var translated = data && data.translatedText;
+        doSpeak(translated ? translated : text);
+      })
+      .catch(function () {
+        doSpeak(text);
+      });
+  }
+
+  function doSpeak(text, lang) {
+    window.speechSynthesis.cancel();
+    var utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    utterance.rate = speechRate;
+    var voice = getVoiceForLang(lang);
+    if (!voice) voice = getSelectedVoice();
+    if (voice) utterance.voice = voice;
+    window.speechSynthesis.speak(utterance);
+  }
+
   document.getElementById("speakBtn").addEventListener("click", function () {
     var text = document.getElementById("textInput").value.trim();
     if (text === "") {
@@ -297,13 +349,9 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     var langSelect = document.getElementById("ttsLanguage");
     var lang = (langSelect && langSelect.value) || ttsLanguage || "en-US";
-    window.speechSynthesis.cancel();
-    var utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang;
-    utterance.rate = speechRate;
-    var voice = getSelectedVoice();
-    if (voice) utterance.voice = voice;
-    window.speechSynthesis.speak(utterance);
+    translateThenSpeak(text, lang, function (textToSpeak) {
+      doSpeak(textToSpeak, lang);
+    });
   });
 
   document
@@ -330,13 +378,9 @@ document.addEventListener("DOMContentLoaded", function () {
               if (text) {
                 var langSelect = document.getElementById("ttsLanguage");
                 var lang = (langSelect && langSelect.value) || ttsLanguage || "en-US";
-                window.speechSynthesis.cancel();
-                var utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = lang;
-                utterance.rate = speechRate;
-                var voice = getSelectedVoice();
-                if (voice) utterance.voice = voice;
-                window.speechSynthesis.speak(utterance);
+                translateThenSpeak(text, lang, function (textToSpeak) {
+                  doSpeak(textToSpeak, lang);
+                });
               } else {
                 alert("Please select some text on the page first.");
               }

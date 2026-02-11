@@ -1,8 +1,7 @@
-// Content script runs in the tab - has chrome.storage and mic permission for the page
+// Injected in tab - uses sendMessage only (background stores so popup can show words)
 var recognition = null;
 var stream = null;
 var fullText = "";
-var CAPTION_KEY = "a11yLiveCaptionText";
 
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg.action === "startCaptions") {
@@ -24,7 +23,7 @@ function startCaptions() {
     return;
   }
   fullText = "";
-  chrome.storage.local.set({ [CAPTION_KEY]: "" });
+  chrome.runtime.sendMessage({ type: "a11yCaptionText", text: "" });
 
   navigator.mediaDevices.getUserMedia({ audio: true })
     .then(function (s) {
@@ -44,7 +43,6 @@ function startCaptions() {
           }
         }
         var text = fullText + interim;
-        chrome.storage.local.set({ [CAPTION_KEY]: text });
         chrome.runtime.sendMessage({ type: "a11yCaptionText", text: text });
       };
 
@@ -85,5 +83,5 @@ function stopCaptions() {
     stream = null;
   }
   fullText = "";
-  chrome.storage.local.set({ [CAPTION_KEY]: "" });
+  chrome.runtime.sendMessage({ type: "a11yCaptionText", text: "" });
 }

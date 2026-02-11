@@ -20,6 +20,10 @@ var focusIndicatorOn = false;
 
 // Wait for DOM
 document.addEventListener("DOMContentLoaded", function () {
+  chrome.storage.local.get(CAPTION_STORAGE_KEY, function (data) {
+    var t = data[CAPTION_STORAGE_KEY];
+    if (t) showCaptionText(t);
+  });
   // ========== DARK MODE TOGGLE ==========
   var savedTheme = localStorage.getItem("theme");
   if (savedTheme === "dark") {
@@ -855,7 +859,7 @@ function startCaptionPolling() {
       var t = data[CAPTION_STORAGE_KEY];
       if (t !== undefined && t !== null) showCaptionText(t);
     });
-  }, 200);
+  }, 150);
 }
 
 function stopCaptionPolling() {

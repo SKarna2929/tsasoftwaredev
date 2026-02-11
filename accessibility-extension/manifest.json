@@ -10,6 +10,13 @@
   "background": {
     "service_worker": "background.js"
   },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content-captions.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "permissions": ["activeTab", "scripting", "storage", "tabs", "<all_urls>"],
   "host_permissions": ["<all_urls>"]
 }

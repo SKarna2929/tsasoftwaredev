@@ -35,6 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // === STATE ===
+  let masterEnabled = true; // Master power switch
   let textSize = 100;
   let letterSpacing = 0;
   let lineHeight = 1.5;
@@ -49,6 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
     bigCursor: false,
     visualAlerts: false,
     focusIndicator: false,
+    selectionReader: false,
   };
 
   // === TOAST SYSTEM ===
@@ -62,6 +64,45 @@ document.addEventListener("DOMContentLoaded", () => {
     toast.classList.add("show");
     clearTimeout(toastTimeout);
     toastTimeout = setTimeout(() => toast.classList.remove("show"), 2600);
+  }
+
+  // === MASTER SWITCH CONTROL ===
+  function setMasterState(enabled) {
+    masterEnabled = enabled;
+    const panels = document.querySelectorAll(".tab-panel, .nav-tabs, .stat-bar");
+    const masterSwitch = document.getElementById("masterSwitch");
+    
+    if (enabled) {
+      panels.forEach(el => {
+        el.style.filter = "";
+        el.style.pointerEvents = "";
+        el.style.opacity = "";
+      });
+    } else {
+      panels.forEach(el => {
+        el.style.filter = "blur(4px)";
+        el.style.pointerEvents = "none";
+        el.style.opacity = "0.5";
+      });
+      
+      // Halt all active effects on the page
+      executeInTab(() => {
+        document.documentElement.style.fontSize = "";
+        document.documentElement.style.filter = "";
+        document.querySelectorAll("*").forEach((el) => {
+          el.style.letterSpacing = "";
+          el.style.lineHeight = "";
+          el.style.filter = "";
+        });
+        ["a11y-high-contrast", "a11y-dyslexia-font", "a11y-dyslexia-font-link",
+         "a11y-reading-guide", "a11y-highlight-links", "a11y-big-cursor",
+         "a11y-color-filter", "a11y-svg-filters", "a11y-visual-alerts",
+         "a11y-focus-indicator"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.remove();
+        });
+      });
+    }
   }
 
   // === ACTIVE COUNTER ===
@@ -79,8 +120,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // === HELPER: EXECUTE IN TAB ===
   function executeInTab(func, args = []) {
+    console.log("executeInTab called with", func.name, args);
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      console.log("Found tabs:", tabs);
       if (tabs[0]) {
+        console.log("Executing script in tab", tabs[0].id);
         chrome.scripting.executeScript({
           target: { tabId: tabs[0].id },
           func: func,
@@ -115,18 +159,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function injectHighContrast(enable) {
+    console.log("HIGH CONTRAST:", enable);
     if (enable) {
-      const s = document.createElement("style");
-      s.id = "a11y-high-contrast";
-      s.textContent = `
-        * { background-color: #000 !important; color: #fff !important; border-color: #fff !important; }
-        img, video, canvas, svg { filter: contrast(1.5) brightness(1.2) !important; }
-        a { color: #4dc3ff !important; text-decoration: underline !important; }
-      `;
-      document.head.appendChild(s);
+      document.documentElement.style.setProperty("filter", "invert(1) hue-rotate(180deg)", "important");
+      console.log("Applied invert filter to html element");
     } else {
-      const s = document.getElementById("a11y-high-contrast");
-      if (s) s.remove();
+      document.documentElement.style.removeProperty("filter");
+      console.log("Removed invert filter");
     }
   }
 
@@ -280,6 +319,61 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function injectSelectionReader(enable, langCode, langMap) {
+    const id = "a11y-selection-reader";
+
+    if (enable) {
+      if (window.aegisSelectionHandler) return; // Already enabled
+
+      window.aegisSelectionHandler = async function () {
+        const selectedText = window.getSelection().toString().trim();
+        if (selectedText.length > 0 && selectedText.length < 500) {
+          try {
+            // Translate if needed
+            const lang = langCode || "en";
+            let textToSpeak = selectedText;
+
+            if (lang !== "en") {
+              const response = await fetch(
+                `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${lang}&dt=t&q=${encodeURIComponent(selectedText)}`,
+              );
+              const data = await response.json();
+              if (data && data[0] && data[0][0] && data[0][0][0]) {
+                textToSpeak = data[0][0][0];
+              }
+            }
+
+            // Speak it
+            const utter = new SpeechSynthesisUtterance(textToSpeak);
+            utter.lang = langMap[lang] || "en-US";
+            utter.rate = 1.0;
+
+            const voices = speechSynthesis.getVoices();
+            const voice =
+              voices.find((v) => v.lang === utter.lang) ||
+              voices.find((v) => v.lang.startsWith(lang));
+            if (voice) utter.voice = voice;
+
+            speechSynthesis.cancel();
+            speechSynthesis.speak(utter);
+          } catch (e) {
+            console.error("Selection reader error:", e);
+          }
+        }
+      };
+
+      document.addEventListener("mouseup", window.aegisSelectionHandler);
+      document.addEventListener("touchend", window.aegisSelectionHandler);
+    } else {
+      if (window.aegisSelectionHandler) {
+        document.removeEventListener("mouseup", window.aegisSelectionHandler);
+        document.removeEventListener("touchend", window.aegisSelectionHandler);
+        delete window.aegisSelectionHandler;
+      }
+      speechSynthesis.cancel();
+    }
+  }
+
   // =======================================================
   // EVENT HANDLERS
   // =======================================================
@@ -344,9 +438,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // Toggle controls
   function setupToggle(id, injectFn, onMsg, offMsg, icon) {
     const btn = document.getElementById(id);
+    console.log("Setting up toggle for", id, "button:", btn);
     btn.addEventListener("click", () => {
       toggleStates[id] = !toggleStates[id];
       btn.classList.toggle("active", toggleStates[id]);
+      console.log("Toggling", id, "to", toggleStates[id]);
       executeInTab(injectFn, [toggleStates[id]]);
       showToast(toggleStates[id] ? onMsg : offMsg, icon);
       updateActiveCount();
@@ -402,6 +498,78 @@ document.addEventListener("DOMContentLoaded", () => {
     "Focus beacon: UNLOCKED",
     "🎯",
   );
+
+  // === MASTER SWITCH ===
+  document.getElementById("masterSwitch").addEventListener("click", () => {
+    masterEnabled = !masterEnabled;
+    const btn = document.getElementById("masterSwitch");
+    btn.classList.toggle("active", masterEnabled);
+
+    const panels = document.querySelectorAll(".tab-panel, .nav-tabs, .stat-bar");
+    
+    if (masterEnabled) {
+      panels.forEach(el => {
+        el.style.filter = "";
+        el.style.pointerEvents = "";
+        el.style.opacity = "";
+      });
+      showToast("SYSTEM POWER: ONLINE", "⚡");
+    } else {
+      panels.forEach(el => {
+        el.style.filter = "blur(4px)";
+        el.style.pointerEvents = "none";
+        el.style.opacity = "0.5";
+      });
+
+      // Halt all active effects on the page
+      executeInTab(() => {
+        document.documentElement.style.fontSize = "";
+        document.documentElement.style.filter = "";
+        document.querySelectorAll("*").forEach((el) => {
+          el.style.letterSpacing = "";
+          el.style.lineHeight = "";
+          el.style.filter = "";
+        });
+        [
+          "a11y-high-contrast",
+          "a11y-dyslexia-font",
+          "a11y-dyslexia-font-link",
+          "a11y-reading-guide",
+          "a11y-highlight-links",
+          "a11y-big-cursor",
+          "a11y-color-filter",
+          "a11y-svg-filters",
+          "a11y-visual-alerts",
+          "a11y-focus-indicator",
+        ].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.remove();
+        });
+      });
+
+      showToast("SYSTEM POWER: OFFLINE — All modules halted", "⏸️");
+    }
+  });
+
+  // === SELECTION READER ===
+  setupToggle(
+    "selectionReader",
+    (enable) => {
+      const lang = document.getElementById("ttsLanguage").value;
+      executeInTab(injectSelectionReader, [enable, lang, langMap]);
+    },
+    "Selection reader: ACTIVE — Highlight text to hear it",
+    "Selection reader: OFFLINE",
+    "✨",
+  );
+
+  // Update selection reader language when TTS language changes
+  document.getElementById("ttsLanguage").addEventListener("change", () => {
+    if (toggleStates.selectionReader) {
+      const lang = document.getElementById("ttsLanguage").value;
+      executeInTab(injectSelectionReader, [true, lang, langMap]);
+    }
+  });
 
   // Color Filters
   document.querySelectorAll(".filter-btn").forEach((btn) => {

@@ -4,7 +4,8 @@
   "description": "Adaptive Experience & Guidance Intelligence System — advanced accessibility suite with vision enhancement, color blindness correction, text-to-speech in 22 languages, live transcription, and more.",
   "version": "3.0.0",
   "action": {
-    "default_title": "A.E.G.I.S. — Breaking Every Barrier"
+    "default_title": "A.E.G.I.S. — Breaking Every Barrier",
+    "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "background.js"

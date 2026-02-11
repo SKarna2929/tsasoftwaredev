@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEGIS Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+        h1 {
+            color: #ffd700;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .highlight-text {
+            background: rgba(255, 215, 0, 0.3);
+            padding: 10px;
+            border-left: 4px solid #ffd700;
+            margin: 15px 0;
+        }
+        a {
+            color: #4dc3ff;
+            text-decoration: none;
+            border-bottom: 2px solid #4dc3ff;
+        }
+        a:hover {
+            color: #ffd700;
+            border-bottom-color: #ffd700;
+        }
+        button {
+            background: #00b4ff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0099e6;
+        }
+    </style>
+</head>
+<body>
+    <h1>🛡️ A.E.G.I.S. Extension Test Page</h1>
+    
+    <div class="card">
+        <h2>Welcome to the Accessibility Test Zone</h2>
+        <p>This page is designed to test all features of the A.E.G.I.S. accessibility extension.</p>
+    </div>
+
+    <div class="card">
+        <h3>High Contrast Test</h3>
+        <p>Click the AEGIS icon in your toolbar and toggle "High Contrast" to invert all colors on this page.</p>
+        <p style="color: #ff6ec7;">This purple text should become its inverted color.</p>
+        <p style="color: #00ff88;">This green text should also invert.</p>
+    </div>
+
+    <div class="card">
+        <h3>Master Power Switch Test</h3>
+        <p>In the extension popup header, you'll see "SYSTEM POWER" with a toggle switch.</p>
+        <ul>
+            <li>Toggle it OFF → The popup interface will blur and all page effects will halt</li>
+            <li>Toggle it ON → Everything returns to normal</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h3>Selection Reader Test (Speech Tab)</h3>
+        <div class="highlight-text">
+            <strong>Instructions:</strong>
+            <ol>
+                <li>Open the AEGIS popup and go to the "Speech" tab</li>
+                <li>Toggle ON the "Speak Selection" feature</li>
+                <li>Highlight ANY text on this page with your mouse</li>
+                <li>The highlighted text will be spoken aloud!</li>
+            </ol>
+        </div>
+        <p><strong>Try highlighting this:</strong> "The quick brown fox jumps over the lazy dog."</p>
+        <p><strong>Or this in different languages:</strong></p>
+        <ul>
+            <li>Spanish: "Hola, ¿cómo estás hoy?"</li>
+            <li>French: "Bonjour, comment allez-vous?"</li>
+            <li>German: "Guten Tag, wie geht es Ihnen?"</li>
+        </ul>
+        <p><em>Tip: Change the language in the dropdown to hear translations!</em></p>
+    </div>
+
+    <div class="card">
+        <h3>Other Features to Test</h3>
+        <p>Don't forget to try these features too:</p>
+        <ul>
+            <li><strong>Text Size:</strong> Increase/decrease text size on the page</li>
+            <li><strong>Letter Spacing:</strong> Adjust spacing between characters</li>
+            <li><strong>Dyslexia Font:</strong> Switch to OpenDyslexic font</li>
+            <li><strong>Reading Guide:</strong> A horizontal guide that follows your mouse</li>
+            <li><strong>Highlight Links:</strong> Makes all <a href="#">links like this</a> more visible</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h3>Interactive Elements</h3>
+        <p>Test visual alerts and focus indicators with these buttons:</p>
+        <button onclick="alert('Button clicked!')">Click Me</button>
+        <button onclick="this.style.background='#ff3333'">Change Color</button>
+        <button onclick="document.body.style.fontSize='larger'">Make Text Larger</button>
+    </div>
+
+    <div class="card" style="background: rgba(0, 0, 0, 0.3);">
+        <h3>📊 Testing Checklist</h3>
+        <p>✅ Master Power Switch (turns extension ON/OFF with blur effect)</p>
+        <p>✅ High Contrast Mode (inverts page colors)</p>
+        <p>✅ Selection Reader (highlight text to hear it spoken)</p>
+        <p>✅ Text Size Adjustments</p>
+        <p>✅ Visual Enhancements</p>
+        <p>✅ Color Filters (Protanopia, Deuteranopia, Tritanopia)</p>
+    </div>
+
+    <footer style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.2);">
+        <p>🚀 A.E.G.I.S. — Adaptive Experience & Guidance Intelligence System</p>
+        <p style="font-size: 14px; opacity: 0.7;">Breaking Every Barrier</p>
+    </footer>
+</body>
+</html>

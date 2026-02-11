@@ -337,6 +337,55 @@ body::-webkit-scrollbar-thumb {
 }
 
 /* Active badge */
+.master-switch-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: rgba(0, 180, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  clip-path: polygon(
+    6px 0%,
+    calc(100% - 6px) 0%,
+    100% 6px,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    6px 100%,
+    0% calc(100% - 6px),
+    0% 6px
+  );
+}
+
+.master-switch-label {
+  font-family: "Orbitron", sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--arc-300);
+  text-shadow: 0 0 8px var(--glow-arc);
+  flex: 1;
+}
+
+.master-switch-container .toggle-btn.active {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 255, 136, 0.25),
+    rgba(0, 200, 100, 0.15)
+  );
+  border-color: var(--hud-green);
+  box-shadow:
+    0 0 12px var(--hud-green-glow),
+    inset 0 0 8px rgba(0, 255, 136, 0.1);
+}
+
+.master-switch-container .toggle-btn.active .toggle-thumb {
+  background: radial-gradient(circle, #66ffbb, var(--hud-green));
+  box-shadow: 0 0 12px var(--hud-green-glow);
+  transform: translateX(22px);
+}
+
 .active-features-badge {
   display: inline-flex;
   align-items: center;
@@ -1550,4 +1599,13 @@ select:focus-visible {
   background: var(--hud-green);
   box-shadow: 0 0 6px var(--hud-green-glow);
   animation: pulseDot 1.5s ease-in-out infinite;
+}
+
+/* === INFO TEXT === */
+.info-text {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 9px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  padding-left: 4px;
 }

@@ -836,19 +836,10 @@ button:focus-visible { outline: 1px solid var(--arc-400); outline-offset: 2px; }
   }
 
   function applyHighContrast(enable) {
-    const id = "a11y-high-contrast";
     if (enable) {
-      if (!document.getElementById(id)) {
-        const s = document.createElement("style");
-        s.id = id;
-        s.textContent = `*:not(#aegis-widget-root):not(#aegis-widget-root *) { background-color: #000 !important; color: #fff !important; border-color: #fff !important; }
-          img, video, canvas, svg:not(#aegis-widget-root svg) { filter: contrast(1.5) brightness(1.2) !important; }
-          a:not(#aegis-widget-root a) { color: #4dc3ff !important; text-decoration: underline !important; }`;
-        document.head.appendChild(s);
-      }
+      document.documentElement.style.filter = "invert(1) hue-rotate(180deg)";
     } else {
-      const s = document.getElementById(id);
-      if (s) s.remove();
+      document.documentElement.style.filter = "";
     }
   }
 

@@ -20,10 +20,6 @@ var focusIndicatorOn = false;
 
 // Wait for DOM
 document.addEventListener("DOMContentLoaded", function () {
-  chrome.storage.local.get(CAPTION_STORAGE_KEY, function (data) {
-    var t = data[CAPTION_STORAGE_KEY];
-    if (t) showCaptionText(t);
-  });
   // ========== DARK MODE TOGGLE ==========
   var savedTheme = localStorage.getItem("theme");
   if (savedTheme === "dark") {
@@ -832,162 +828,17 @@ function injectFocusIndicator(enabled) {
 }
 
 // ============================================
-// LIVE CAPTIONS - content script in tab does mic + recognition, writes to storage
-// Popup polls storage so words always show (like when it was working before)
+// LIVE CAPTIONS - opens a tab where words show when you speak (no messaging)
 // ============================================
-var isListening = false;
-var captionsTabId = null;
-var captionPollTimer = null;
-var CAPTION_STORAGE_KEY = "a11yLiveCaptionText";
-
-var CAPTIONS_MIC_DENIED_MSG =
-  "Microphone access denied. Open a normal webpage (e.g. google.com), click the mic again, and click Allow when Chrome asks.";
-
-function showCaptionText(text) {
-  var d = document.getElementById("captionDisplay");
-  if (d) {
-    d.textContent = text || "";
-    d.scrollTop = d.scrollHeight;
-  }
-}
-
-function startCaptionPolling() {
-  if (captionPollTimer) return;
-  captionPollTimer = setInterval(function () {
-    if (!isListening) return;
-    chrome.storage.local.get(CAPTION_STORAGE_KEY, function (data) {
-      var t = data[CAPTION_STORAGE_KEY];
-      if (t !== undefined && t !== null) showCaptionText(t);
-    });
-  }, 150);
-}
-
-function stopCaptionPolling() {
-  if (captionPollTimer) {
-    clearInterval(captionPollTimer);
-    captionPollTimer = null;
-  }
-}
-
-chrome.runtime.onMessage.addListener(function (msg) {
-  if (msg.type === "a11yCaptionText") {
-    showCaptionText(msg.text);
-  }
-  if (msg.type === "a11yCaptionStarted") {
-    isListening = true;
-    startCaptionPolling();
-    var statusEl = document.getElementById("captionStatus");
-    if (statusEl) {
-      statusEl.className = "caption-status listening";
-      var st = statusEl.querySelector(".status-text");
-      if (st) st.textContent = "Listening...";
-    }
-    document.getElementById("startCaptionsBtn").classList.add("active");
-  }
-  if (msg.type === "a11yCaptionDenied") {
-    isListening = false;
-    stopCaptionPolling();
-    alert(CAPTIONS_MIC_DENIED_MSG);
-    var statusEl = document.getElementById("captionStatus");
-    if (statusEl) {
-      statusEl.className = "caption-status idle";
-      var st = statusEl.querySelector(".status-text");
-      if (st) st.textContent = "Ready";
-    }
-    document.getElementById("startCaptionsBtn").classList.remove("active");
-  }
-});
-
-chrome.storage.onChanged.addListener(function (changes, area) {
-  if (area === "local" && changes[CAPTION_STORAGE_KEY]) {
-    showCaptionText(changes[CAPTION_STORAGE_KEY].newValue);
-  }
-});
-
 function startCaptions() {
-  if (isListening) return;
-
-  var display = document.getElementById("captionDisplay");
-  if (display) {
-    display.textContent = "";
-    display.innerHTML = "";
-  }
-  chrome.storage.local.set({ [CAPTION_STORAGE_KEY]: "" });
-
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    var tab = tabs[0];
-    if (!tab || !tab.id) {
-      alert("Open a webpage first, then try again.");
-      return;
-    }
-    var url = (tab.url || "");
-    if (url.indexOf("chrome://") === 0 || url.indexOf("chrome-extension://") === 0) {
-      alert("Open a normal website (e.g. google.com) in this tab, then click the mic again.");
-      return;
-    }
-    captionsTabId = tab.id;
-    isListening = true;
-    startCaptionPolling();
-    var statusEl = document.getElementById("captionStatus");
-    if (statusEl) {
-      statusEl.className = "caption-status listening";
-      var st = statusEl.querySelector(".status-text");
-      if (st) st.textContent = "Listening...";
-    }
-    document.getElementById("startCaptionsBtn").classList.add("active");
-
-    chrome.scripting.executeScript(
-      { target: { tabId: tab.id }, files: ["content-captions.js"] },
-      function () {
-        if (chrome.runtime.lastError) {
-          isListening = false;
-          stopCaptionPolling();
-          document.getElementById("startCaptionsBtn").classList.remove("active");
-          if (statusEl) {
-            statusEl.className = "caption-status idle";
-            var st = statusEl.querySelector(".status-text");
-            if (st) st.textContent = "Ready";
-          }
-          alert("Cannot use captions on this page. Open a normal website (e.g. google.com) and try again.");
-          return;
-        }
-        chrome.tabs.sendMessage(tab.id, { action: "startCaptions" }, function () {
-          if (chrome.runtime.lastError) {
-            isListening = false;
-            stopCaptionPolling();
-            document.getElementById("startCaptionsBtn").classList.remove("active");
-            if (statusEl) {
-              statusEl.className = "caption-status idle";
-              var st = statusEl.querySelector(".status-text");
-              if (st) st.textContent = "Ready";
-            }
-          }
-        });
-      }
-    );
-  });
+  chrome.tabs.create({ url: chrome.runtime.getURL("captions.html?start=1") });
 }
 
 function stopCaptions() {
-  isListening = false;
-  stopCaptionPolling();
-  if (captionsTabId) {
-    try {
-      chrome.tabs.sendMessage(captionsTabId, { action: "stopCaptions" });
-    } catch (e) {}
-    captionsTabId = null;
-  }
-  var statusEl = document.getElementById("captionStatus");
-  if (statusEl) {
-    statusEl.className = "caption-status idle";
-    var st = statusEl.querySelector(".status-text");
-    if (st) st.textContent = "Ready";
-  }
   var display = document.getElementById("captionDisplay");
   if (display) {
     display.innerHTML = "<span class=\"placeholder-text\">Your words will appear here...</span>";
   }
-  chrome.storage.local.set({ [CAPTION_STORAGE_KEY]: "" });
   document.getElementById("startCaptionsBtn").classList.remove("active");
 }
 

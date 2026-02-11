@@ -814,11 +814,15 @@ function runLiveCaptionsInPage() {
       recognition.lang = "en-US";
       var fullText = "";
       recognition.onresult = function (e) {
+        var interim = "";
         for (var i = e.resultIndex; i < e.results.length; i++) {
-          fullText += e.results[i][0].transcript;
-          if (e.results[i].isFinal) fullText += " ";
+          if (e.results[i].isFinal) {
+            fullText += e.results[i][0].transcript + " ";
+          } else {
+            interim += e.results[i][0].transcript;
+          }
         }
-        chrome.runtime.sendMessage({ type: "a11yCaptionText", text: fullText });
+        chrome.runtime.sendMessage({ type: "a11yCaptionText", text: fullText + interim });
       };
       recognition.onerror = function (e) {
         if (e.error === "not-allowed") chrome.runtime.sendMessage({ type: "a11yCaptionDenied" });

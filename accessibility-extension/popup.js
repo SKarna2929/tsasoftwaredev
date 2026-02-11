@@ -19,6 +19,8 @@ var focusIndicatorOn = false;
 
 // Wait for DOM
 document.addEventListener("DOMContentLoaded", function () {
+  // Show any live caption text from storage when popup opens
+  updateCaptionDisplayFromStorage();
   // ========== DARK MODE TOGGLE ==========
   var savedTheme = localStorage.getItem("theme");
   if (savedTheme === "dark") {
@@ -721,7 +723,7 @@ function injectFocusIndicator(enabled) {
 }
 
 // ============================================
-// LIVE CAPTIONS (run in popup so words show in the same window)
+// LIVE CAPTIONS (recognition in tab, transcript synced via storage so words show)
 // ============================================
 var recognition = null;
 var isListening = false;
@@ -735,6 +737,26 @@ var CAPTIONS_MIC_DENIED_MSG =
   "2. If you already blocked it: click the lock or info icon in the address bar → Site settings → set Microphone to Allow.\n" +
   "3. Or go to Chrome Settings → Privacy and security → Site settings → Microphone and allow this site or \"Ask before accessing\".";
 
+var CAPTION_STORAGE_KEY = "a11yLiveCaptionText";
+
+function updateCaptionDisplayFromStorage() {
+  chrome.storage.local.get(CAPTION_STORAGE_KEY, function (data) {
+    var text = data[CAPTION_STORAGE_KEY];
+    var display = document.getElementById("captionDisplay");
+    if (display) {
+      display.textContent = text != null ? text : "";
+      display.scrollTop = display.scrollHeight;
+    }
+  });
+}
+
+// When storage changes (tab wrote new transcript), update the popup display
+chrome.storage.onChanged.addListener(function (changes, areaName) {
+  if (areaName === "local" && changes[CAPTION_STORAGE_KEY]) {
+    updateCaptionDisplayFromStorage();
+  }
+});
+
 function startCaptions() {
   var SpeechRecognition =
     window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -744,97 +766,133 @@ function startCaptions() {
   }
   if (isListening) return;
 
-  // Run in popup so the words appear in this window. Keep the popup open while talking.
+  chrome.storage.local.set({ [CAPTION_STORAGE_KEY]: "" });
   finalTranscript = "";
   var display = document.getElementById("captionDisplay");
   if (display) {
     display.textContent = "";
     display.innerHTML = "";
   }
-  requestMicInPopup();
+  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+    var tab = tabs[0];
+    if (!tab || !tab.id) {
+      alert("No tab found. Open a webpage and try again.");
+      return;
+    }
+    if (
+      tab.url &&
+      (tab.url.startsWith("chrome://") || tab.url.startsWith("chrome-extension://"))
+    ) {
+      alert("Open a normal webpage (e.g. google.com) then try Live Captions again.");
+      return;
+    }
+    captionsTabId = tab.id;
+    chrome.scripting.executeScript(
+      { target: { tabId: tab.id }, func: runCaptionsInTab },
+      function () {
+        if (chrome.runtime.lastError) {
+          alert("Could not start captions on this page. Try a different webpage.");
+          return;
+        }
+        isListening = true;
+        var statusEl = document.getElementById("captionStatus");
+        if (statusEl) {
+          statusEl.className = "caption-status listening";
+          var st = statusEl.querySelector(".status-text");
+          if (st) st.textContent = "Listening...";
+        }
+        document.getElementById("startCaptionsBtn").classList.add("active");
+      }
+    );
+  });
 }
 
-function requestMicInPopup() {
+function runCaptionsInTab() {
+  var SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return;
   navigator.mediaDevices
     .getUserMedia({ audio: true })
     .then(function (stream) {
-      stream.getTracks().forEach(function (track) {
-        track.stop();
-      });
-      initRecognition();
+      var recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+      window.__a11yCaptionFinal = "";
+      window.__a11yRecognition = recognition;
+      recognition.onresult = function (e) {
+        var interim = "";
+        for (var i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) {
+            window.__a11yCaptionFinal += e.results[i][0].transcript + " ";
+          } else {
+            interim += e.results[i][0].transcript;
+          }
+        }
+        var text = (window.__a11yCaptionFinal || "") + interim;
+        chrome.storage.local.set({ a11yLiveCaptionText: text });
+      };
+      recognition.onerror = function (e) {
+        if (e.error === "not-allowed") {
+          chrome.storage.local.set({ a11yLiveCaptionText: "" });
+        }
+      };
+      recognition.onend = function () {
+        if (window.__a11yListening) {
+          try {
+            recognition.start();
+          } catch (err) {}
+        }
+      };
+      window.__a11yListening = true;
+      recognition.start();
     })
-    .catch(function (err) {
-      alert(CAPTIONS_MIC_DENIED_MSG);
+    .catch(function () {
+      chrome.storage.local.set({ a11yLiveCaptionText: "" });
     });
-}
-
-function initRecognition() {
-  var SpeechRecognition =
-    window.SpeechRecognition || window.webkitSpeechRecognition;
-  recognition = new SpeechRecognition();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.lang = "en-US";
-  var display = document.getElementById("captionDisplay");
-  if (!display) return;
-  recognition.onstart = function () {
-    isListening = true;
-    var statusEl = document.getElementById("captionStatus");
-    if (statusEl) {
-      statusEl.className = "caption-status listening";
-      var st = statusEl.querySelector(".status-text");
-      if (st) st.textContent = "Listening...";
-    }
-    document.getElementById("startCaptionsBtn").classList.add("active");
-  };
-  recognition.onresult = function (e) {
-    var interim = "";
-    for (var i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) {
-        finalTranscript += e.results[i][0].transcript + " ";
-      } else {
-        interim += e.results[i][0].transcript;
-      }
-    }
-    display.textContent = finalTranscript + interim;
-    display.scrollTop = display.scrollHeight;
-  };
-  recognition.onerror = function (e) {
-    if (e.error === "not-allowed") alert(CAPTIONS_MIC_DENIED_MSG);
-    stopCaptions();
-  };
-  recognition.onend = function () {
-    if (isListening) {
-      try {
-        recognition.start();
-      } catch (err) {
-        stopCaptions();
-      }
-    }
-  };
-  recognition.start();
 }
 
 function stopCaptions() {
   isListening = false;
-  if (recognition) {
+  if (captionsTabId) {
     try {
-      recognition.stop();
+      chrome.scripting.executeScript({
+        target: { tabId: captionsTabId },
+        func: function () {
+          window.__a11yListening = false;
+          if (window.__a11yRecognition) {
+            try {
+              window.__a11yRecognition.stop();
+            } catch (e) {}
+            window.__a11yRecognition = null;
+          }
+          window.__a11yCaptionFinal = "";
+        },
+      });
     } catch (err) {}
-    recognition = null;
+    captionsTabId = null;
   }
-  captionsTabId = null;
+  chrome.storage.local.set({ [CAPTION_STORAGE_KEY]: "" });
   var statusEl = document.getElementById("captionStatus");
   if (statusEl) {
     statusEl.className = "caption-status idle";
     var st = statusEl.querySelector(".status-text");
     if (st) st.textContent = "Ready";
   }
+  var display = document.getElementById("captionDisplay");
+  if (display) {
+    display.innerHTML =
+      '<span class="placeholder-text">Your words will appear here...</span>';
+  }
   document.getElementById("startCaptionsBtn").classList.remove("active");
 }
 
 function clearCaptions() {
   finalTranscript = "";
-  document.getElementById("captionDisplay").innerHTML =
-    '<span class="placeholder-text">Your words will appear here...</span>';
+  chrome.storage.local.set({ [CAPTION_STORAGE_KEY]: "" });
+  var display = document.getElementById("captionDisplay");
+  if (display) {
+    display.innerHTML =
+      '<span class="placeholder-text">Your words will appear here...</span>';
+  }
 }

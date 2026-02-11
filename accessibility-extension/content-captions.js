@@ -24,6 +24,9 @@ function startCaptions() {
   }
   fullText = "";
   chrome.runtime.sendMessage({ type: "a11yCaptionText", text: "" });
+  try {
+    chrome.storage.local.set({ a11yLiveCaptionText: "" });
+  } catch (e) {}
 
   navigator.mediaDevices.getUserMedia({ audio: true })
     .then(function (s) {
@@ -44,6 +47,9 @@ function startCaptions() {
         }
         var text = fullText + interim;
         chrome.runtime.sendMessage({ type: "a11yCaptionText", text: text });
+        try {
+          chrome.storage.local.set({ a11yLiveCaptionText: text });
+        } catch (e) {}
       };
 
       recognition.onerror = function (e) {
@@ -84,4 +90,7 @@ function stopCaptions() {
   }
   fullText = "";
   chrome.runtime.sendMessage({ type: "a11yCaptionText", text: "" });
+  try {
+    chrome.storage.local.set({ a11yLiveCaptionText: "" });
+  } catch (e) {}
 }
